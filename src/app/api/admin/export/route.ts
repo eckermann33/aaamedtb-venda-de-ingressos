@@ -1,0 +1,56 @@
+import { toCsv } from "@/lib/csv";
+import { formatDateTime } from "@/lib/dates";
+import { audit } from "@/server/audit";
+import { requireAdminApi } from "@/server/auth";
+import { getSql } from "@/server/db";
+import { allPurchases, officialList } from "@/server/reports";
+
+const STATUS_LABEL: Record<string, string> = {
+  confirmed: "Confirmado",
+  pending: "Pendente",
+  rejected: "Recusado",
+  cancelled: "Cancelado",
+  expired: "Expirado",
+  refunded: "Reembolsado",
+  failed: "Falhou",
+};
+
+function money(cents: number) {
+  return (cents / 100).toFixed(2).replace(".", ",");
+}
+
+export async function GET(request: Request) {
+  const admin = await requireAdminApi(request);
+  if (admin instanceof Response) return admin;
+  const scope = new URL(request.url).searchParams.get("scope") === "all" ? "all" : "official";
+  const sql = getSql();
+  const stamp = new Date().toISOString().slice(0, 10);
+
+  let csv: string;
+  if (scope === "official") {
+    const rows = await officialList(sql);
+    csv = toCsv(
+      ["Nº", "Nome completo", "Categoria", "Código interno", "Entrada (marcar)"],
+      rows.map((r, i) => [i + 1, r.full_name, r.category_label, r.ticket_code, ""]),
+    );
+  } else {
+    const all = await allPurchases(sql);
+    csv = toCsv(
+      ["Nome completo", "Categoria", "Valor total (R$)", "Taxa (R$)", "Forma", "Status da compra", "Status MP",
+       "ID pagamento MP", "Código interno", "Criada em", "Confirmada em", "Alerta"],
+      all.map((r) => [
+        r.full_name, r.category_label, money(r.amount_cents), money(r.fee_cents),
+        r.payment_method === "pix" ? "Pix" : "Cartão", STATUS_LABEL[r.status] ?? r.status, r.payment_status,
+        r.mp_payment_id, r.ticket_code, formatDateTime(r.created_at), formatDateTime(r.confirmed_at), r.attention,
+      ]),
+    );
+  }
+  await audit(sql, admin.id, "export_csv", { scope });
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="invictus-${scope === "official" ? "lista-oficial" : "compras"}-${stamp}.csv"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}

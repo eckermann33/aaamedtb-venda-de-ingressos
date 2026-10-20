@@ -1,0 +1,90 @@
+/**
+ * CONFIGURAÇÃO INICIAL DO EVENTO
+ *
+ * Estes são os valores usados para criar a configuração no banco de dados na
+ * primeira execução de `npm run db:migrate`. Depois disso, tudo pode ser
+ * alterado pelo painel em /admin/configuracoes (sem mexer no código).
+ *
+ * Campos com `null` são INFORMAÇÕES PENDENTES: ainda não foram fornecidas pela
+ * organização e não devem ser inventadas. As vendas só podem ser abertas
+ * depois que os campos obrigatórios forem preenchidos no painel.
+ */
+
+export type EventInfo = {
+  name: string;
+  tagline: string;
+  organizer: string;
+  organizerShort: string;
+  partner: string | null;
+  /** Data no formato AAAA-MM-DD. */
+  date: string | null;
+  /** Horário de início, ex.: "22:00". */
+  startTime: string | null;
+  endTime: string | null;
+  venueName: string | null;
+  venueAddress: string | null;
+  ageRating: string;
+  about: string;
+  camarote: string;
+  contactEmail: string | null;
+  contactInstagram: string | null;
+  /** Nome que aparece na fatura do cartão (até 13 caracteres). */
+  statementDescriptor: string;
+  /** Dias após o evento em que os nomes dos compradores devem ser anonimizados. */
+  retentionDays: number;
+};
+
+export type TermsContent = {
+  rules: string[];
+  refundPolicy: string | null;
+  cancellationPolicy: string | null;
+  transferPolicy: string | null;
+};
+
+export const DEFAULT_EVENT: EventInfo = {
+  name: "Party do Saco Cheio",
+  tagline: "O semestre não acaba e as festas também não!",
+  organizer: "Associação Atlética Acadêmica de Medicina de Telêmaco Borba — Invictus (A.A.A.MED.TB)",
+  organizerShort: "Atlética Invictus",
+  partner: "Santo Gole",
+  date: "2026-10-24",
+  startTime: null, // PENDENTE
+  endTime: null, // PENDENTE (opcional)
+  venueName: null, // PENDENTE
+  venueAddress: null, // PENDENTE
+  ageRating: "Proibido para menores de 18 anos.",
+  about:
+    "A festa da Atlética Invictus em parceria com a Santo Gole. A entrada é feita pela lista oficial: depois que o pagamento é aprovado, seu nome completo entra na lista da portaria.",
+  camarote:
+    "O camarote será vendido separadamente na entrada da festa, conforme disponibilidade. A compra do ingresso comum não garante acesso ao camarote.",
+  contactEmail: null, // PENDENTE
+  contactInstagram: null, // PENDENTE (opcional)
+  statementDescriptor: "INVICTUS",
+  retentionDays: 90,
+};
+
+export const DEFAULT_TERMS: TermsContent = {
+  rules: [
+    "A entrada é permitida exclusivamente para maiores de 18 anos.",
+    "Poderá ser exigido documento oficial com foto para verificar a identidade e a idade do participante.",
+    "É proibida a entrada com bebidas externas.",
+    "É proibida a entrada com armas, objetos cortantes, perfurantes ou outros objetos que representem risco à segurança.",
+    "Não será permitida a entrada de objetos ou substâncias proibidos pela legislação ou pelas regras de segurança do evento.",
+    "O camarote será vendido separadamente na entrada da festa, conforme disponibilidade.",
+    "A compra do ingresso comum não garante acesso ao camarote.",
+  ],
+  refundPolicy: null, // PENDENTE — obrigatório antes de abrir as vendas
+  cancellationPolicy: null, // PENDENTE — obrigatório antes de abrir as vendas
+  transferPolicy: null, // PENDENTE — obrigatório antes de abrir as vendas
+};
+
+export const DEFAULT_CATEGORIES = [
+  { id: "feminino", label: "Feminino", priceCents: 2000, sortOrder: 1 },
+  { id: "masculino", label: "Masculino", priceCents: 2500, sortOrder: 2 },
+];
+
+/** Taxa de serviço por ingresso (em centavos). Alterável no painel. */
+export const DEFAULT_SERVICE_FEE_CENTS = 300;
+
+/** Tempo que uma vaga fica reservada enquanto o pagamento está pendente. */
+export const PAYMENT_WINDOW_MINUTES = 30;
