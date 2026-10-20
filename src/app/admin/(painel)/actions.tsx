@@ -135,6 +135,39 @@ export function RefundButton({ purchaseId, mpPaymentId, label }: { purchaseId: s
   );
 }
 
+export function TransferForm({ purchaseId, currentName }: { purchaseId: string; currentName: string }) {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  return (
+    <form
+      className="toolbar"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!confirm(`Transferir o ingresso de "${currentName}" para "${name.trim()}"?`)) return;
+        setBusy(true);
+        const r = await post(`/api/admin/purchases/${purchaseId}/transfer`, { fullName: name });
+        setBusy(false);
+        setMsg(r.ok ? { ok: true, text: "Nome atualizado na lista oficial." } : { ok: false, text: r.data?.error?.message ?? "Erro." });
+        if (r.ok) {
+          setName("");
+          router.refresh();
+        }
+      }}
+    >
+      <div className="field" style={{ flex: "2 1 240px" }}>
+        <label htmlFor="novo-nome">Nome completo da nova pessoa</label>
+        <input id="novo-nome" className="input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
+      </div>
+      <button className="btn btn-sm" style={{ minHeight: 46 }} disabled={busy || name.trim().length < 5}>
+        {busy ? "Salvando…" : "Transferir"}
+      </button>
+      {msg && <p className={msg.ok ? "hint" : "field-error"}>{msg.text}</p>}
+    </form>
+  );
+}
+
 export function AnonymizeButton({ purchaseId }: { purchaseId: string }) {
   const router = useRouter();
   return (

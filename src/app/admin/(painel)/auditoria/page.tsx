@@ -12,6 +12,7 @@ const ACTIONS: Record<string, string> = {
   view_entry_list: "Abriu a lista de entrada",
   reconcile: "Conferiu pendentes no MP",
   refund: "Estornou pagamento",
+  transfer: "Transferiu ingresso (trocou o nome)",
   anonymize_one: "Removeu dados de uma compra",
   anonymize_all: "Anonimizou todas as compras",
   admin_created: "Administrador criado",

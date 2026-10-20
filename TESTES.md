@@ -7,8 +7,8 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Camada | Ferramenta | Resultado |
 | --- | --- | --- |
 | Tipos (TypeScript) | `npm run typecheck` | ✅ sem erros |
-| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 42/42 |
-| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 15/15 |
+| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 47/47 |
+| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 16/16 |
 | Build de produção | `npm run build` | ✅ |
 
 **Importante:** os testes de pagamento usam um **simulador local** do Mercado Pago (`tests/mock-mp/server.mjs`), que imita a API e envia webhooks assinados. O ambiente onde o projeto foi construído **não tem acesso à rede do Mercado Pago**, então **não houve teste contra o sandbox nem contra a produção do Mercado Pago**. Isso precisa ser feito antes de abrir as vendas (roteiro na seção 7 do README).
@@ -18,7 +18,7 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | # | Cenário | Como foi verificado | Status |
 | --- | --- | --- | --- |
 | 1 | Compra de ingresso feminino | Integração (preço 20,00 + taxa 3,00 = 23,00) e navegador (Pix completo) | ✅ (simulador) |
-| 2 | Compra de ingresso masculino | Integração (25,00 + 3,00 = 28,00) e navegador (cartão completo) | ✅ (simulador) |
+| 2 | Compra de ingresso masculino | Integração (30,00 + 3,00 = 33,00) e navegador (cartão completo) | ✅ (simulador) |
 | 3 | Cálculo correto dos preços | Integração: preço/taxa vindos do banco; alteração de preço vale para novas compras | ✅ |
 | 4 | Validação dos campos obrigatórios | Navegador (mensagens na tela) e integração (nome vazio, só espaços, sem sobrenome, com símbolos) | ✅ |
 | 5 | Bloqueio de menores de 18 anos | Navegador (não avança sem marcar) e API (400 com `adultConfirmed: false`) | ✅ |
@@ -50,11 +50,13 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 - Versão dos termos e data/hora do aceite registradas; aceite de versão antiga é recusado.
 - Senhas: hash scrypt com sal, verificação, regras mínimas.
 - Lista impressa conferida em PDF A4.
+- Transferência de ingresso pelo painel: nome trocado na lista impressa, código interno mantido; compra pendente não pode ser transferida.
+- Telefone de contato: formatos comuns aceitos; número com letra (ex.: "429l1374203") é recusado em vez de virar outro número.
 
 ## Limitações conhecidas / o que falta
 
 1. **Teste com o Mercado Pago real (sandbox e produção) não realizado** — sem acesso de rede ao Mercado Pago neste ambiente. Os campos da API foram conferidos no SDK oficial `mercadopago` v3.6.1, mas é obrigatório fazer o roteiro do README (seção 7).
-2. **Dados do evento pendentes**: horário, local, contato e políticas de reembolso/cancelamento/transferência (as vendas ficam bloqueadas até preencher).
+2. **Dados do evento pendentes**: telefone de contato válido (o informado tem uma letra) e política em caso de cancelamento do evento (as vendas ficam bloqueadas até preencher).
 3. A política de privacidade é um modelo — revise com a diretoria.
 4. Testes em iPhone/Safari reais não foram feitos (apenas Chromium com perfil de celular).
 5. Os valores de custo (Mercado Pago, Railway) no README são referências e devem ser confirmados nos sites oficiais.

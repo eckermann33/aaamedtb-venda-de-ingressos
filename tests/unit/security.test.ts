@@ -72,3 +72,24 @@ describe("diversos", () => {
     expect(validateFullName(123)).not.toBeNull();
   });
 });
+
+describe("contato", () => {
+  it("formata telefone e gera link do WhatsApp; ignora número inválido", async () => {
+    const { contactLinks } = await import("@/lib/contact");
+    expect(contactLinks({ contactPhone: "(42) 99999-8888", contactEmail: null })).toEqual([
+      { label: "WhatsApp (42) 99999-8888", href: "https://wa.me/5542999998888" },
+    ]);
+    expect(contactLinks({ contactPhone: "429l1374203", contactEmail: null })).toEqual([]);
+  });
+});
+
+describe("telefone", () => {
+  it("aceita formatos comuns e recusa letras", async () => {
+    const { phoneDigits } = await import("@/lib/contact");
+    expect(phoneDigits("(42) 99999-8888")).toBe("42999998888");
+    expect(phoneDigits("+55 42 99999-8888")).toBe("42999998888");
+    expect(phoneDigits("4233334444")).toBe("4233334444");
+    expect(phoneDigits("429l1374203")).toBeNull();
+    expect(phoneDigits("123")).toBeNull();
+  });
+});

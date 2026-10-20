@@ -13,7 +13,7 @@ test("página do evento mostra preços com a taxa e não exibe nomes de particip
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Party do\s*Saco Cheio/i })).toBeVisible();
   await expect(page.getByText("+ R$ 3,00 de taxa de serviço · total R$ 23,00")).toBeVisible();
-  await expect(page.getByText("+ R$ 3,00 de taxa de serviço · total R$ 28,00")).toBeVisible();
+  await expect(page.getByText("+ R$ 3,00 de taxa de serviço · total R$ 33,00")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Camarote" })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflow).toBe(false);
@@ -71,7 +71,7 @@ test("2/7. compra masculina por cartão: redireciona ao checkout e volta aprovad
   await fillStep1(page, "Carlos Henrique Prado", "Masculino");
   await page.getByRole("radio", { name: /Cartão/ }).check();
   await expect(page.getByText("ambiente seguro do Mercado Pago")).toBeVisible();
-  await page.getByRole("button", { name: "Pagar R$ 28,00 com cartão" }).click();
+  await page.getByRole("button", { name: "Pagar R$ 33,00 com cartão" }).click();
 
   await expect(page.getByText("SIMULADOR LOCAL")).toBeVisible();
   await expect(page.getByText("Taxa de serviço: R$ 3.00")).toBeVisible();
@@ -80,7 +80,7 @@ test("2/7. compra masculina por cartão: redireciona ao checkout e volta aprovad
 
   await expect(page.getByRole("heading", { name: "Pagamento aprovado!" })).toBeVisible({ timeout: 20_000 });
   const [row] = await db`SELECT status, amount_cents, payment_method FROM purchases`;
-  expect(row).toMatchObject({ status: "confirmed", amount_cents: 2800, payment_method: "card" });
+  expect(row).toMatchObject({ status: "confirmed", amount_cents: 3300, payment_method: "card" });
 });
 
 test("10. cartão recusado mostra o estado e não entra na lista", async ({ page }) => {
@@ -139,9 +139,9 @@ test("13. API ignora preço adulterado e bloqueia requisições de outra origem 
   const res = await request.post("/api/purchases", { data: body, headers: { Origin: baseURL! } });
   expect(res.status()).toBe(201);
   const json = await res.json();
-  expect(json.purchase.amountCents).toBe(2800);
+  expect(json.purchase.amountCents).toBe(3300);
   const state = await mockState();
-  expect(state.requests.at(-1).body.transaction_amount).toBe(28);
+  expect(state.requests.at(-1).body.transaction_amount).toBe(33);
 
   const minor = await request.post("/api/purchases", {
     data: { ...body, clientRequestId: crypto.randomUUID(), adultConfirmed: false },
@@ -252,7 +252,7 @@ test.describe("painel administrativo", () => {
     await loginAdmin(page);
     const confirmed = page.locator(".stat", { hasText: "Ingressos confirmados" });
     await expect(confirmed.locator(".v")).toHaveText("2");
-    await expect(page.locator(".stat", { hasText: "Faturamento bruto" }).locator(".v")).toHaveText("R$ 51,00");
+    await expect(page.locator(".stat", { hasText: "Faturamento bruto" }).locator(".v")).toHaveText("R$ 56,00");
     await expect(page.locator(".stat", { hasText: "Pendentes" }).locator(".v")).toHaveText("1");
 
     await page.goto("/admin/compras");
@@ -277,6 +277,25 @@ test.describe("painel administrativo", () => {
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(overflow).toBe(false);
+  });
+
+  test("transferência: organização troca o nome e a lista impressa já mostra a nova pessoa", async ({ page }) => {
+    await fillStep1(page, "Fernanda Lopes Prado", "Feminino");
+    await page.getByLabel("E-mail para o Pix").fill("f@example.com");
+    await page.getByRole("button", { name: /Gerar Pix/ }).click();
+    await expect(page.getByAltText("QR Code do Pix")).toBeVisible();
+    const [p] = await db`SELECT id, mp_payment_id FROM purchases`;
+    await mockPayment(p.mp_payment_id, { status: "approved" });
+
+    await loginAdmin(page);
+    await page.goto(`/admin/compras/${p.id}`);
+    page.on("dialog", (d) => d.accept());
+    await page.getByLabel("Nome completo da nova pessoa").fill("Gabriela Nunes Torres");
+    await page.getByRole("button", { name: "Transferir" }).click();
+    await expect(page.getByText("Nome atualizado na lista oficial.")).toBeVisible();
+    await page.goto("/admin/lista");
+    await expect(page.locator(".print-list tbody")).toContainText("Gabriela Nunes Torres");
+    await expect(page.locator(".print-list tbody")).not.toContainText("Fernanda");
   });
 
   test("fechar vendas pelo painel e bloqueio de abertura com pendências", async ({ page }) => {

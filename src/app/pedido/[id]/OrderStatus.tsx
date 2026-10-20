@@ -14,10 +14,11 @@ import {
   IconRefresh,
   IconX,
 } from "@/components/icons";
+import type { ContactLink } from "@/lib/contact";
 import { formatBRL } from "@/lib/money";
 import type { PublicPurchase } from "@/server/purchases";
 
-type Props = { initial: PublicPurchase; contactEmail: string | null; eventName: string };
+type Props = { initial: PublicPurchase; contacts: ContactLink[]; eventName: string };
 
 const WAITING = new Set(["preparing", "awaiting_payment", "payment_rejected"]);
 
@@ -34,7 +35,7 @@ function useCountdown(target: string | null) {
   return { ms, label: `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` };
 }
 
-export default function OrderStatus({ initial, contactEmail, eventName }: Props) {
+export default function OrderStatus({ initial, contacts, eventName }: Props) {
   const [p, setP] = useState(initial);
   const [toast, setToast] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -110,9 +111,9 @@ export default function OrderStatus({ initial, contactEmail, eventName }: Props)
     </dl>
   );
 
-  const contact = contactEmail ? (
+  const contact = contacts.length ? (
     <>
-      Fale com a organização: <a href={`mailto:${contactEmail}`}>{contactEmail}</a>.
+      Fale com a organização: <a href={contacts[0].href}>{contacts[0].label}</a>.
     </>
   ) : (
     <>Fale com a organização da Atlética.</>

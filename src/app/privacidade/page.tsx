@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Satin, SiteFooter, SiteHeader } from "@/components/site";
+import { contactLinks } from "@/lib/contact";
 import { getSql } from "@/server/db";
 import { loadSettings } from "@/server/settings";
 
@@ -8,6 +9,7 @@ export const metadata: Metadata = { title: "Política de privacidade" };
 export default async function PrivacyPage() {
   const s = await loadSettings(getSql());
   const e = s.event;
+  const contacts = contactLinks(e);
   return (
     <>
       <Satin />
@@ -20,12 +22,19 @@ export default async function PrivacyPage() {
           <h2>Quem é responsável pelos seus dados</h2>
           <p>
             O controlador dos dados é a {e.organizer}.{" "}
-            {e.contactEmail ? (
+            {contacts.length > 0 ? (
               <>
-                Contato para assuntos de privacidade: <a href={`mailto:${e.contactEmail}`}>{e.contactEmail}</a>.
+                Contato para assuntos de privacidade:{" "}
+                {contacts.map((c, i) => (
+                  <span key={c.href}>
+                    {i > 0 && " ou "}
+                    <a href={c.href}>{c.label}</a>
+                  </span>
+                ))}
+                .
               </>
             ) : (
-              <span className="pending-value">E-mail de contato ainda não definido.</span>
+              <span className="pending-value">Contato ainda não definido.</span>
             )}
           </p>
 

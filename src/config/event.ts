@@ -27,6 +27,8 @@ export type EventInfo = {
   about: string;
   camarote: string;
   contactEmail: string | null;
+  /** Telefone/WhatsApp da organização (somente dígitos, com DDD). */
+  contactPhone: string | null;
   contactInstagram: string | null;
   /** Nome que aparece na fatura do cartão (até 13 caracteres). */
   statementDescriptor: string;
@@ -48,16 +50,18 @@ export const DEFAULT_EVENT: EventInfo = {
   organizerShort: "Atlética Invictus",
   partner: "Santo Gole",
   date: "2026-10-24",
-  startTime: null, // PENDENTE
+  startTime: "23:30",
   endTime: null, // PENDENTE (opcional)
-  venueName: null, // PENDENTE
-  venueAddress: null, // PENDENTE
+  venueName: "Santo Gole",
+  venueAddress: null, // opcional — endereço não informado
   ageRating: "Proibido para menores de 18 anos.",
   about:
     "A festa da Atlética Invictus em parceria com a Santo Gole. A entrada é feita pela lista oficial: depois que o pagamento é aprovado, seu nome completo entra na lista da portaria.",
   camarote:
     "O camarote será vendido separadamente na entrada da festa, conforme disponibilidade. A compra do ingresso comum não garante acesso ao camarote.",
-  contactEmail: null, // PENDENTE
+  contactEmail: null, // opcional
+  // PENDENTE — o número informado ("429l1374203") tem um caractere inválido; confirmar antes de publicar.
+  contactPhone: null,
   contactInstagram: null, // PENDENTE (opcional)
   statementDescriptor: "INVICTUS",
   retentionDays: 90,
@@ -73,14 +77,16 @@ export const DEFAULT_TERMS: TermsContent = {
     "O camarote será vendido separadamente na entrada da festa, conforme disponibilidade.",
     "A compra do ingresso comum não garante acesso ao camarote.",
   ],
-  refundPolicy: null, // PENDENTE — obrigatório antes de abrir as vendas
-  cancellationPolicy: null, // PENDENTE — obrigatório antes de abrir as vendas
-  transferPolicy: null, // PENDENTE — obrigatório antes de abrir as vendas
+  refundPolicy:
+    "Depois que o pagamento é aprovado, a compra não pode ser cancelada pelo comprador e o valor não é reembolsado, ressalvados os direitos previstos no Código de Defesa do Consumidor.",
+  cancellationPolicy: null, // PENDENTE — o que acontece se o EVENTO for cancelado/adiado
+  transferPolicy:
+    "O ingresso pode ser transferido para outra pessoa maior de 18 anos. Para isso, envie uma mensagem para o telefone/WhatsApp de contato da organização informando o nome completo de quem comprou e o nome completo da nova pessoa. A organização atualiza o nome na lista oficial de entrada.",
 };
 
 export const DEFAULT_CATEGORIES = [
   { id: "feminino", label: "Feminino", priceCents: 2000, sortOrder: 1 },
-  { id: "masculino", label: "Masculino", priceCents: 2500, sortOrder: 2 },
+  { id: "masculino", label: "Masculino", priceCents: 3000, sortOrder: 2 },
 ];
 
 /** Taxa de serviço por ingresso (em centavos). Alterável no painel. */

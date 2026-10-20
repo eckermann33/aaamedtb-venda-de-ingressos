@@ -39,10 +39,10 @@ describe("preços e categorias", () => {
     expect(p.status).toBe("pending");
   });
 
-  it("2. ingresso masculino: R$ 25,00 + taxa de R$ 3,00", async () => {
+  it("2. ingresso masculino: R$ 30,00 + taxa de R$ 3,00", async () => {
     const p = await createPurchase(deps(mp), request(terms, { categoryId: "masculino", paymentMethod: "card" }));
-    expect(p.amount_cents).toBe(2800);
-    expect(mp.prefCalls[0].ticketPriceCents).toBe(2500);
+    expect(p.amount_cents).toBe(3300);
+    expect(mp.prefCalls[0].ticketPriceCents).toBe(3000);
     expect(mp.prefCalls[0].feeCents).toBe(300);
     expect(p.checkout_url).toContain("https://mp.example/checkout/");
   });
@@ -327,5 +327,40 @@ describe("12. comprador fecha o navegador / webhook não chega", () => {
     await reconcilePurchase(sql(), mp, p.id, { minIntervalSeconds: 0, hintPaymentId: String(otherPayment.id) });
     expect((await getPurchase(sql(), p.id))!.status).toBe("pending");
     expect((await getPurchase(sql(), other.id))!.status).toBe("pending");
+  });
+});
+
+describe("transferência de ingresso", () => {
+  it("troca o nome na lista mantendo o código interno", async () => {
+    const { transferPurchase } = await import("@/server/purchases");
+    const p = await createPurchase(deps(mp), request(terms));
+    await applyPayment(sql(), mp.set(p.mp_payment_id!, "approved"));
+    const before = (await getPurchase(sql(), p.id))!;
+    const after = await transferPurchase(sql(), p.id, "  Joana   Prado Lima ");
+    expect(after.full_name).toBe("Joana Prado Lima");
+    expect(after.ticket_code).toBe(before.ticket_code);
+    expect((await officialList(sql())).map((r) => r.full_name)).toEqual(["Joana Prado Lima"]);
+  });
+
+  it("não transfere compra pendente nem aceita nome inválido", async () => {
+    const { transferPurchase } = await import("@/server/purchases");
+    const p = await createPurchase(deps(mp), request(terms));
+    await expectError(transferPurchase(sql(), p.id, "Outra Pessoa Silva"), "not_transferable");
+    await applyPayment(sql(), mp.set(p.mp_payment_id!, "approved"));
+    await expectError(transferPurchase(sql(), p.id, "   "), "invalid_name");
+  });
+});
+
+describe("pendências antes de abrir as vendas", () => {
+  it("contato pode ser telefone OU e-mail; endereço é opcional", async () => {
+    const { loadSettings, readiness } = await import("@/server/settings");
+    const env = { mpAccessToken: true, mpWebhookSecret: true };
+    await sql()`UPDATE settings SET event = event || '{"contactEmail": null, "contactPhone": null, "venueAddress": null}'::jsonb`;
+    let items = readiness(await loadSettings(sql()), env);
+    expect(items.find((i) => i.key === "contactPhone")?.blocking).toBe(true);
+    expect(items.find((i) => i.key === "venueAddress")?.blocking).toBe(false);
+    await sql()`UPDATE settings SET event = event || '{"contactPhone": "42999998888"}'::jsonb`;
+    items = readiness(await loadSettings(sql()), env);
+    expect(items.some((i) => i.blocking)).toBe(false);
   });
 });

@@ -7,7 +7,7 @@ Plataforma de venda de ingressos da **Associação Atlética Acadêmica de Medic
 - Preço + **taxa de serviço de R$ 3,00** (configurável), sempre exibidos separadamente antes de pagar.
 - Confirmação **só pelo servidor** (webhook assinado + consulta à API do Mercado Pago). Voltar para a "página de sucesso" não confirma nada.
 - Banco PostgreSQL com travas contra confirmação dupla, ingresso duplicado e venda acima da lotação.
-- Painel da organização com login: resumo financeiro, busca de compradores, **lista de entrada para imprimir (A4)**, exportação CSV, abrir/fechar vendas, preços, taxa, lotação, regras e auditoria.
+- Painel da organização com login: resumo financeiro, busca de compradores, **lista de entrada para imprimir (A4)**, exportação CSV, **transferência de ingresso (troca de nome)**, abrir/fechar vendas, preços, taxa, lotação, regras e auditoria.
 
 > Não existe portal de portaria: a lista oficial é impressa pelo painel (`/admin/lista`).
 
@@ -36,18 +36,19 @@ Esses dados **não foram fornecidos** e por isso **não foram inventados**. Enqu
 
 | Informação | Obrigatória para vender? |
 | --- | --- |
-| Horário de início (e término, opcional) | ✅ Sim |
-| Nome e endereço do local | ✅ Sim |
-| E-mail de contato da organização (exigido pela LGPD e para suporte) | ✅ Sim |
-| Política de reembolso | ✅ Sim |
-| Política em caso de cancelamento do evento | ✅ Sim |
-| Política de transferência de ingresso | ✅ Sim |
+| **Telefone/WhatsApp de contato** — o número informado ("429l1374203") tem uma letra; confirmar o número correto (ou informar um e-mail) | ✅ Sim (exigido pela LGPD e usado nas transferências) |
+| **Política em caso de cancelamento/adiamento do evento** (ex.: devolução do valor) | ✅ Sim |
 | Credenciais do Mercado Pago (`MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`) | ✅ Sim |
+| Endereço do local | ⚠️ Não — só o nome "Santo Gole" aparece |
 | Limite de ingressos (lotação) | ⚠️ Não — vazio = sem limite (o painel avisa) |
-| Instagram da Atlética | Opcional |
+| Horário de término, e-mail, Instagram | Opcionais |
 | Preço do camarote | Não é vendido online nesta versão |
 
-Já configurado com o que foi informado: nome **Party do Saco Cheio**, data **24/10/2026**, frase do cartaz, parceria **Santo Gole**, preços **Feminino R$ 20,00** e **Masculino R$ 25,00**, **taxa de R$ 3,00 por ingresso**, regras de entrada e texto do camarote.
+Já configurado com o que foi informado: nome **Party do Saco Cheio**, **24/10/2026 a partir das 23:30**, local **Santo Gole**, frase do cartaz, parceria **Santo Gole**, preços **Feminino R$ 20,00** e **Masculino R$ 30,00**, **taxa de R$ 3,00 por ingresso**, regras de entrada, texto do camarote, **compra sem cancelamento/reembolso** e **transferência por mensagem ao contato da organização**.
+
+> A política "não dá para cancelar" foi escrita com a ressalva "ressalvados os direitos previstos no Código de Defesa do Consumidor": o CDC (art. 49) garante arrependimento em até 7 dias em compras pela internet, e uma regra que tente anular isso não vale. Ajuste o texto no painel se quiser.
+
+**Transferência:** quando alguém pedir por mensagem, abra a compra em **/admin/compras → Detalhes → Transferir ingresso** e digite o nome completo da nova pessoa. A lista impressa e o CSV já saem com o nome novo (o código interno continua o mesmo).
 
 Os valores iniciais ficam em [`src/config/event.ts`](src/config/event.ts) e são copiados para o banco na primeira migração. Depois disso, valem os do painel.
 

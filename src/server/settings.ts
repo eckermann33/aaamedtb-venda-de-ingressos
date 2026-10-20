@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { EventInfo, TermsContent } from "@/config/event";
+import { phoneDigits } from "@/lib/contact";
 import type { Sql, TxSql } from "./db";
 
 export type Category = {
@@ -97,9 +98,8 @@ export function readiness(
   if (blank(e.date)) items.push({ key: "date", label: "Data do evento", blocking: true });
   if (blank(e.startTime)) items.push({ key: "startTime", label: "Horário de início", blocking: true });
   if (blank(e.venueName)) items.push({ key: "venueName", label: "Nome do local", blocking: true });
-  if (blank(e.venueAddress)) items.push({ key: "venueAddress", label: "Endereço do local", blocking: true });
-  if (blank(e.contactEmail)) {
-    items.push({ key: "contactEmail", label: "E-mail de contato da organização (exigido pela LGPD)", blocking: true });
+  if (!phoneDigits(e.contactPhone) && blank(e.contactEmail)) {
+    items.push({ key: "contactPhone", label: "Contato da organização: telefone/WhatsApp ou e-mail (exigido pela LGPD)", blocking: true });
   }
   if (blank(t.refundPolicy)) items.push({ key: "refundPolicy", label: "Política de reembolso", blocking: true });
   if (blank(t.cancellationPolicy)) {
@@ -115,6 +115,7 @@ export function readiness(
   if (!envState.mpWebhookSecret) {
     items.push({ key: "mpWebhookSecret", label: "Assinatura secreta do webhook (MP_WEBHOOK_SECRET)", blocking: true });
   }
+  if (blank(e.venueAddress)) items.push({ key: "venueAddress", label: "Endereço do local não informado (só o nome aparece)", blocking: false });
   if (settings.capacity === null) {
     items.push({ key: "capacity", label: "Limite de ingressos não definido (vendas sem limite)", blocking: false });
   }

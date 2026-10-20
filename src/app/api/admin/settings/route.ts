@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { phoneDigits } from "@/lib/contact";
 import { audit } from "@/server/audit";
 import { requireAdminApi } from "@/server/auth";
 import { getSql } from "@/server/db";
@@ -42,6 +43,12 @@ const schema = z.object({
     about: z.string().trim().max(1500),
     camarote: z.string().trim().max(800),
     contactEmail: z.email().max(254).nullable().or(z.literal("").transform(() => null)),
+    contactPhone: z
+      .string()
+      .max(30)
+      .refine((s) => s.trim() === "" || phoneDigits(s) !== null, "Telefone com DDD, só números (10 ou 11 dígitos)")
+      .transform((s) => phoneDigits(s))
+      .nullable(),
     contactInstagram: text(60),
     statementDescriptor: z
       .string()

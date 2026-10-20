@@ -574,6 +574,25 @@ export async function refundPurchasePayment(
   return applyPayment(sql, payment);
 }
 
+/**
+ * Transferência de ingresso: troca o nome na lista oficial. Só vale para
+ * compras confirmadas; o código interno do ingresso continua o mesmo.
+ */
+export async function transferPurchase(sql: Sql, id: string, newName: string): Promise<PurchaseRow> {
+  const error = validateFullName(newName);
+  if (error) throw new PurchaseError("invalid_name", error, 400);
+  const name = cleanName(newName);
+  const rows = await sql<PurchaseRow[]>`
+    UPDATE purchases SET full_name = ${name}, name_search = ${searchableName(name)}, updated_at = now()
+    WHERE id = ${id} AND status = 'confirmed' AND anonymized_at IS NULL
+    RETURNING *
+  `;
+  if (!rows[0]) {
+    throw new PurchaseError("not_transferable", "Só é possível transferir ingressos confirmados.", 409);
+  }
+  return rows[0];
+}
+
 export const ANONYMIZED_NAME = "Titular removido";
 
 /** Remove o nome de uma compra (pedido do titular ou fim do prazo de retenção). */

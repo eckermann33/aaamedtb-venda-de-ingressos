@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { EventInfo } from "@/config/event";
+import { contactLinks } from "@/lib/contact";
 
 export function Satin() {
   return (
@@ -53,13 +54,14 @@ export function SiteFooter({ event }: { event: EventInfo }) {
         <div>
           <h2>Contato</h2>
           <ul>
-            {event.contactEmail ? (
-              <li>
-                <a href={`mailto:${event.contactEmail}`}>{event.contactEmail}</a>
+            {contactLinks(event).map((c) => (
+              <li key={c.href}>
+                <a href={c.href} target={c.href.startsWith("https:") ? "_blank" : undefined} rel="noopener noreferrer">
+                  {c.label}
+                </a>
               </li>
-            ) : (
-              <li className="pending-value">E-mail a confirmar</li>
-            )}
+            ))}
+            {contactLinks(event).length === 0 && <li className="pending-value">Contato a confirmar</li>}
             {event.contactInstagram && (
               <li>
                 <a

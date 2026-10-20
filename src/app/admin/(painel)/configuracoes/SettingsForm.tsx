@@ -76,7 +76,7 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        event: { ...event, retentionDays: Number(event.retentionDays) },
+        event: { ...event, contactPhone: event.contactPhone ?? null, retentionDays: Number(event.retentionDays) },
         capacity: capacity.trim() === "" ? null : Number(capacity),
         serviceFeeCents: feeCents,
         terms: {
@@ -129,7 +129,8 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
         <div className="form-grid">
           {text("organizer", "Nome da organização", { span: true })}
           {text("organizerShort", "Nome curto")}
-          {text("contactEmail", "E-mail de contato (LGPD e suporte)", { type: "email" })}
+          {text("contactPhone", "Telefone/WhatsApp com DDD", { type: "tel", placeholder: "(42) 99999-9999" })}
+          {text("contactEmail", "E-mail de contato (opcional)", { type: "email" })}
           {text("contactInstagram", "Instagram (opcional)", { placeholder: "@atleticainvictus" })}
           {text("statementDescriptor", "Nome na fatura do cartão (até 13)")}
           {text("retentionDays", "Anonimizar nomes após (dias do evento)", { type: "number" })}

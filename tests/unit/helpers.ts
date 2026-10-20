@@ -33,7 +33,7 @@ export async function resetDb(opts: { capacity?: number | null; salesOpen?: bool
         contactEmail: "contato@example.com",
       })}
   `;
-  await db`UPDATE ticket_categories SET active = true, price_cents = CASE id WHEN 'feminino' THEN 2000 ELSE 2500 END`;
+  await db`UPDATE ticket_categories SET active = true, price_cents = CASE id WHEN 'feminino' THEN 2000 ELSE 3000 END`;
   return terms.id;
 }
 

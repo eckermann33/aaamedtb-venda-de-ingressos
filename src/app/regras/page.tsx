@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Satin, SiteFooter, SiteHeader } from "@/components/site";
 import { formatDateTime } from "@/lib/dates";
+import { contactLinks } from "@/lib/contact";
 import { AGE_TEXT } from "@/lib/validation";
 import { getSql } from "@/server/db";
 import { loadSettings } from "@/server/settings";
@@ -66,12 +67,12 @@ export default async function RulesPage() {
           <h2>Contato</h2>
           <p>
             {s.event.organizer}
-            {s.event.contactEmail && (
-              <>
+            {contactLinks(s.event).map((c) => (
+              <span key={c.href}>
                 {" "}
-                — <a href={`mailto:${s.event.contactEmail}`}>{s.event.contactEmail}</a>
-              </>
-            )}
+                — <a href={c.href}>{c.label}</a>
+              </span>
+            ))}
           </p>
         </article>
       </main>

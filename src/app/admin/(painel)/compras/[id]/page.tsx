@@ -5,7 +5,7 @@ import { formatDateTime } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
 import { getSql } from "@/server/db";
 import { getPurchase, isUuid } from "@/server/purchases";
-import { AnonymizeButton, RefundButton } from "../../actions";
+import { AnonymizeButton, RefundButton, TransferForm } from "../../actions";
 
 export default async function PurchaseDetail(props: PageProps<"/admin/compras/[id]">) {
   const { id } = await props.params;
@@ -72,6 +72,17 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
           </ul>
         </div>
       </div>
+
+      {p.status === "confirmed" && !row.anonymized_at && (
+        <div className="panel">
+          <h2>Transferir ingresso</h2>
+          <p className="hint">
+            Troca o nome na lista oficial (ex.: pedido recebido por mensagem). Confirme que a nova pessoa tem 18 anos ou
+            mais. O código interno do ingresso continua o mesmo.
+          </p>
+          <TransferForm purchaseId={p.id} currentName={p.full_name} />
+        </div>
+      )}
 
       <div className="panel">
         <h2>Privacidade (LGPD)</h2>
