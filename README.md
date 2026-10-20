@@ -247,6 +247,30 @@ HTTPS: a Railway já entrega HTTPS; o app redireciona HTTP→HTTPS, envia HSTS e
 
 ---
 
+### 6.1. Alternativa: publicar na Vercel
+
+O app roda na Vercel sem mudar código. A diferença é que a Vercel **não hospeda o PostgreSQL**: você cria o banco em outro serviço (Neon ou Supabase, ambos com região em São Paulo e plano gratuito) e a Vercel só roda o site.
+
+1. **Banco:** crie um projeto no Neon (`neon.tech`) ou Supabase, **região São Paulo (sa-east-1)**. Copie **duas** URLs: a **direta** (para migrar) e a **com pooler** (para o site).
+2. **Criar as tabelas** (uma vez, no seu Mac, usando a URL **direta**):
+   ```bash
+   DATABASE_URL="URL_DIRETA" npm run db:migrate
+   DATABASE_URL="URL_DIRETA" npm run admin:create -- diretoria@exemplo.com
+   ```
+3. **Vercel:** em `vercel.com` → **Add New → Project** → importe este repositório do GitHub.
+4. **Environment Variables** (as mesmas da Railway, mais três para o modo serverless):
+   - `DATABASE_URL` = URL **com pooler**
+   - `DATABASE_POOL_SIZE` = `1`
+   - `DATABASE_PREPARE` = `false` (necessário em pooler modo transaction/PgBouncer)
+   - `APP_URL`, `APP_SECRET`, `CRON_SECRET`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET` (como na seção 6)
+5. **Deploy.** Depois configure o webhook do Mercado Pago com `https://SEU-PROJETO.vercel.app/api/webhooks/mercadopago` (seção 4.3).
+6. **Região das funções:** em *Settings → Functions → Function Region*, escolha **São Paulo (gru1)** para ficar perto do banco.
+7. **Conciliação periódica:** use o **cron-job.org** (gratuito) chamando `GET https://SEU-SITE/api/cron/reconcile` a cada 5–10 min com o cabeçalho `Authorization: Bearer <CRON_SECRET>`. Não use o Cron da Vercel no plano gratuito: ele só roda **uma vez por dia**.
+
+⚠️ **Plano da Vercel:** o plano gratuito (Hobby) é, segundo os termos da Vercel, para uso **não comercial**. Vender ingresso é cobrança, então **confira os termos atuais** antes de usar o Hobby em produção; o plano Pro é pago por mês. Na Railway não existe essa restrição, mas o app e o banco ficam num plano pago pequeno.
+
+---
+
 ## 7. Checklist do dia da publicação
 
 Com **credenciais de teste** publicadas:
