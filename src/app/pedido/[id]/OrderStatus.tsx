@@ -6,7 +6,6 @@ import {
   IconAlert,
   IconBan,
   IconCheck,
-  IconCopy,
   IconExternal,
   IconHourglass,
   IconInfo,
@@ -37,11 +36,10 @@ function useCountdown(target: string | null) {
 
 export default function OrderStatus({ initial, contacts, eventName }: Props) {
   const [p, setP] = useState(initial);
-  const [toast, setToast] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const failures = useRef(0);
   const waiting = WAITING.has(p.state);
-  const countdown = useCountdown(p.pix?.expiresAt ?? (waiting ? p.expiresAt : null));
+  const countdown = useCountdown(waiting ? p.expiresAt : null);
 
   const refresh = useCallback(async () => {
     try {
@@ -68,17 +66,6 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [waiting, refresh]);
-
-  async function copyPix() {
-    if (!p.pix) return;
-    try {
-      await navigator.clipboard.writeText(p.pix.qrCode);
-      setToast("Código Pix copiado!");
-    } catch {
-      setToast("Não deu para copiar — selecione o código e copie manualmente.");
-    }
-    setTimeout(() => setToast(null), 2500);
-  }
 
   async function checkNow() {
     setChecking(true);
@@ -158,8 +145,8 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
             <div className="notice notice-danger" role="alert" style={{ marginBottom: 18, textAlign: "left" }}>
               <IconAlert size={20} />
               <span>
-                <strong>Pagamento recusado.</strong> Nenhum valor foi cobrado. Você pode tentar outro cartão abaixo
-                enquanto a reserva estiver válida.
+                <strong>O último pagamento não foi concluído</strong> (recusado, cancelado ou expirado). Nenhum valor foi
+                cobrado. Você pode tentar de novo enquanto a reserva estiver válida.
               </span>
             </div>
           )}
@@ -167,53 +154,21 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
             <span className="live-dot" aria-hidden />
             Aguardando pagamento
           </h1>
-          {p.paymentMethod === "pix" && p.pix ? (
-            <div className="pix-box">
-              <p className="status-text" style={{ marginBottom: 0 }}>
-                Abra o app do seu banco, escolha <strong>Pix → Ler QR Code</strong> ou <strong>Pix Copia e Cola</strong>.
-              </p>
-              {p.pix.qrCodeBase64 && (
-                <div className="qr">
-                  <img src={`data:image/png;base64,${p.pix.qrCodeBase64}`} alt="QR Code do Pix" width={280} height={280} />
-                </div>
-              )}
-              <div className="countdown" aria-live="off">
-                {countdown && countdown.ms > 0 ? (
-                  <>
-                    Expira em <strong>{countdown.label}</strong>
-                  </>
-                ) : (
-                  <>Prazo do Pix encerrado</>
-                )}
-              </div>
-              <div className="pix-code" aria-label="Código Pix copia e cola">
-                {p.pix.qrCode}
-              </div>
-              <button type="button" className="btn btn-lg btn-block" onClick={copyPix}>
-                <IconCopy size={20} /> Copiar código Pix
-              </button>
-              <p className="hint" style={{ margin: 0 }}>
-                Valor: <strong>{formatBRL(p.amountCents)}</strong>. A confirmação aparece aqui sozinha em segundos — pode
-                até fechar esta página: se o pagamento for aprovado, seu nome entra na lista mesmo assim.
-              </p>
-            </div>
-          ) : (
-            <>
-              <p className="status-text">
-                Conclua o pagamento com cartão no ambiente seguro do Mercado Pago. Assim que for aprovado, seu nome entra
-                na lista automaticamente.
-              </p>
-              {p.checkoutUrl && (
-                <a className="btn btn-lg btn-block" href={p.checkoutUrl}>
-                  <IconExternal size={20} /> Ir para o Mercado Pago
-                </a>
-              )}
-              {countdown && countdown.ms > 0 && (
-                <p className="countdown" style={{ marginTop: 14 }}>
-                  Reserva válida por <strong>{countdown.label}</strong>
-                </p>
-              )}
-            </>
+          <p className="status-text">
+            {p.paymentMethod === "pix"
+              ? "Abra o Mercado Pago para ver o QR Code e o Pix copia e cola. "
+              : "Conclua o pagamento com cartão no ambiente seguro do Mercado Pago. "}
+            Assim que for aprovado, seu nome entra na lista automaticamente — pode até fechar esta página.
+          </p>
+          {p.checkoutUrl && (
+            <a className="btn btn-lg btn-block" href={p.checkoutUrl}>
+              <IconExternal size={20} /> {p.paymentMethod === "pix" ? "Ir para o Pix no Mercado Pago" : "Ir para o Mercado Pago"}
+            </a>
+          )}
+          {countdown && countdown.ms > 0 && (
+            <p className="countdown" style={{ marginTop: 14 }}>
+              Reserva válida por <strong>{countdown.label}</strong>
+            </p>
           )}
           {summary}
           <button type="button" className="btn btn-ghost btn-sm" onClick={checkNow} disabled={checking}>
@@ -321,11 +276,6 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
         </span>
       )}
       {body}
-      {toast && (
-        <div className="toast" role="status">
-          {toast}
-        </div>
-      )}
     </section>
   );
 }

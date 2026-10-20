@@ -40,8 +40,6 @@ export const purchaseRequestSchema = z.object({
   paymentMethod: z.enum(["pix", "card"]),
   // Telefone/WhatsApp do comprador para avisos sobre o evento (ex.: cancelamento).
   buyerPhone: z.string().max(30),
-  // Exigido pelo Mercado Pago para gerar o Pix. Não é armazenado pela plataforma.
-  payerEmail: z.email().max(254).optional(),
 });
 
 export type PurchaseRequest = z.infer<typeof purchaseRequestSchema>;

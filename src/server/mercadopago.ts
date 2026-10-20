@@ -2,8 +2,7 @@
  * Cliente da API REST oficial do Mercado Pago (https://api.mercadopago.com).
  *
  * Endpoints utilizados:
- *  - POST /v1/payments              → cria o pagamento Pix (Checkout Transparente)
- *  - POST /checkout/preferences     → cria o checkout de cartão (Checkout Pro)
+ *  - POST /checkout/preferences     → cria o checkout (Checkout Pro) para Pix ou cartão
  *  - GET  /v1/payments/{id}         → consulta o estado real de um pagamento
  *  - GET  /v1/payments/search       → busca pagamentos pela external_reference
  *  - POST /v1/payments/{id}/refunds → estorna um pagamento
@@ -49,15 +48,9 @@ export class MercadoPagoError extends Error {
   }
 }
 
-export type PixInput = {
-  purchaseId: string;
-  amountCents: number;
-  description: string;
-  payerEmail: string;
-  expiresAt: Date;
-};
-
 export type PreferenceInput = {
+  /** Forma de pagamento oferecida no checkout: só Pix ou só cartão de crédito. */
+  method: "pix" | "card";
   purchaseId: string;
   ticketPriceCents: number;
   feeCents: number;
@@ -69,8 +62,7 @@ export type PreferenceInput = {
 };
 
 export interface MercadoPagoClient {
-  createPixPayment(input: PixInput): Promise<MpPayment>;
-  createCardPreference(input: PreferenceInput): Promise<MpPreference>;
+  createCheckoutPreference(input: PreferenceInput): Promise<MpPreference>;
   getPayment(id: string): Promise<MpPayment>;
   searchPaymentsByReference(externalReference: string): Promise<MpPayment[]>;
   refundPayment(id: string, idempotencyKey: string): Promise<void>;
@@ -128,24 +120,7 @@ export function createMercadoPagoClient(
   }
 
   return {
-    createPixPayment(input) {
-      return call<MpPayment>(
-        "POST",
-        "/v1/payments",
-        {
-          transaction_amount: centsToAmount(input.amountCents),
-          description: input.description,
-          payment_method_id: "pix",
-          external_reference: input.purchaseId,
-          date_of_expiration: toMpDate(input.expiresAt),
-          payer: { email: input.payerEmail },
-        },
-        // A mesma chave para a mesma compra impede pagamentos Pix duplicados.
-        `pix-${input.purchaseId}`,
-      );
-    },
-
-    createCardPreference(input) {
+    createCheckoutPreference(input) {
       const now = new Date();
       return call<MpPreference>(
         "POST",
@@ -175,21 +150,19 @@ export function createMercadoPagoClient(
           external_reference: input.purchaseId,
           back_urls: { success: input.backUrl, failure: input.backUrl, pending: input.backUrl },
           auto_return: "approved",
-          // Aprovado ou recusado na hora: evita reservas presas em análise.
-          binary_mode: true,
+          // Cartão: aprovado ou recusado na hora, sem ficar preso em análise.
+          // (Não usamos no Pix, que é pendente por natureza até o comprador pagar.)
+          ...(input.method === "card" ? { binary_mode: true } : {}),
           expires: true,
           expiration_date_from: toMpDate(now),
           expiration_date_to: toMpDate(input.expiresAt),
           statement_descriptor: input.statementDescriptor.slice(0, 13),
           payment_methods: {
-            // Somente cartão de crédito neste checkout (o Pix é gerado no próprio site).
-            excluded_payment_types: [
-              { id: "ticket" },
-              { id: "atm" },
-              { id: "debit_card" },
-              { id: "bank_transfer" },
-              { id: "digital_currency" },
-            ],
+            // Cada forma de pagamento tem o seu botão no nosso site: aqui oferecemos só a escolhida.
+            excluded_payment_types:
+              input.method === "pix"
+                ? [{ id: "credit_card" }, { id: "debit_card" }, { id: "ticket" }, { id: "atm" }, { id: "digital_currency" }]
+                : [{ id: "ticket" }, { id: "atm" }, { id: "debit_card" }, { id: "bank_transfer" }, { id: "digital_currency" }],
             // Parcela única: o comprador paga exatamente o valor anunciado.
             installments: 1,
             default_installments: 1,
@@ -235,8 +208,7 @@ export function getMercadoPago(): MercadoPagoClient {
       throw new MercadoPagoError("MP_ACCESS_TOKEN não configurado", 0);
     };
     return {
-      createPixPayment: fail,
-      createCardPreference: fail,
+      createCheckoutPreference: fail,
       getPayment: fail,
       searchPaymentsByReference: fail,
       refundPayment: fail,

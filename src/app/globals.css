@@ -1637,41 +1637,6 @@ fieldset.field {
   margin: 0 auto 18px;
 }
 
-.pix-box {
-  display: grid;
-  gap: 16px;
-  justify-items: center;
-}
-
-.qr {
-  background: #fff;
-  padding: 14px;
-  border-radius: 16px;
-  width: min(280px, 100%);
-  box-shadow: 0 0 0 6px rgba(141, 224, 59, 0.25), 0 0 40px var(--neon-glow);
-}
-
-.qr img {
-  width: 100%;
-  image-rendering: pixelated;
-}
-
-.pix-code {
-  width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
-  word-break: break-all;
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(5, 8, 5, 0.75);
-  border: 1px dashed var(--line-strong);
-  color: var(--muted);
-  max-height: 96px;
-  overflow: auto;
-  text-align: left;
-  user-select: all;
-}
-
 .countdown {
   font-family: var(--font-label), sans-serif;
   font-weight: 700;
@@ -1701,38 +1666,6 @@ fieldset.field {
   }
   100% {
     box-shadow: 0 0 0 0 rgba(141, 224, 59, 0);
-  }
-}
-
-.pix-steps {
-  text-align: left;
-  color: var(--muted);
-  font-size: 0.93rem;
-  margin: 0;
-  padding-left: 20px;
-  display: grid;
-  gap: 4px;
-}
-
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 24px;
-  transform: translateX(-50%);
-  z-index: 60;
-  background: var(--neon);
-  color: #061005;
-  font-weight: 700;
-  padding: 12px 20px;
-  border-radius: 999px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  animation: toast-in 0.25s ease;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 10px);
   }
 }
 

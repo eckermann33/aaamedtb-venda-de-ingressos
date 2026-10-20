@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { E2E_DB, MOCK_URL } from "../../playwright.config";
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from "./global-setup";
@@ -58,4 +58,57 @@ export async function loginAdmin(page: Page) {
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.waitForURL("**/admin");
+}
+
+export type ApiPurchase = { id: string; amountCents: number; checkoutUrl: string | null; state: string };
+
+/** Cria uma compra pela API (sem passar pelas telas), como o formulário faz. */
+export async function createPurchaseViaApi(
+  request: APIRequestContext,
+  baseURL: string,
+  opts: { name: string; category?: "feminino" | "masculino"; method?: "pix" | "card"; extra?: Record<string, unknown> },
+): Promise<ApiPurchase> {
+  const [settings] = await db`SELECT current_terms_version_id AS t FROM settings`;
+  const res = await request.post("/api/purchases", {
+    headers: { Origin: baseURL },
+    data: {
+      clientRequestId: crypto.randomUUID(),
+      fullName: opts.name,
+      categoryId: opts.category ?? "feminino",
+      adultConfirmed: true,
+      termsAccepted: true,
+      termsVersionId: settings.t,
+      paymentMethod: opts.method ?? "pix",
+      buyerPhone: "42999998888",
+      ...opts.extra,
+    },
+  });
+  expect(res.status()).toBe(201);
+  return (await res.json()).purchase;
+}
+
+/**
+ * Simula o comprador no Mercado Pago: cria uma tentativa de pagamento para a compra e
+ * dispara o webhook assinado. Retorna o id do pagamento no simulador.
+ */
+export async function payViaMock(
+  purchase: { id: string; amountCents: number },
+  status: "pending" | "approved" | "rejected",
+  over: Record<string, unknown> = {},
+) {
+  const created = await (
+    await fetch(`${MOCK_URL}/__mock/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        external_reference: purchase.id,
+        transaction_amount: purchase.amountCents / 100,
+        payment_method_id: "pix",
+        payment_type_id: "bank_transfer",
+        ...over,
+      }),
+    })
+  ).json();
+  const result = await mockPayment(String(created.id), { status, ...(over.badSignature ? { badSignature: true } : {}) });
+  return { id: String(created.id), webhookStatuses: result.webhookStatuses as number[] };
 }

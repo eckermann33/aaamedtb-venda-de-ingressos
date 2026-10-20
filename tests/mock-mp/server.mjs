@@ -10,17 +10,12 @@
  * e no .env do app:  MP_API_BASE_URL=http://127.0.0.1:4010  MP_ACCESS_TOKEN=TEST-mock
  */
 import { createHmac, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import http from "node:http";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.MOCK_MP_PORT ?? 4010);
 const APP_URL = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const SECRET = process.env.MP_WEBHOOK_SECRET ?? "segredo-de-teste";
 const SELF = `http://127.0.0.1:${PORT}`;
-const QR_BASE64 = readFileSync(path.join(here, "fake-qr.png")).toString("base64");
 
 let nextId = 1_000_000_001;
 const payments = new Map(); // id -> payment
@@ -91,16 +86,22 @@ function setStatus(p, status, detail) {
 
 function checkoutPage(pref) {
   const total = pref.items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+  const excluded = (pref.payment_methods?.excluded_payment_types ?? []).map((t) => t.id);
+  const pixOnly = excluded.includes("credit_card");
+  const buttons = pixOnly
+    ? `<form method="post" action="/checkout/${pref.id}/pay"><input type="hidden" name="result" value="pix_pending"><button class="no" id="pix-gerar">Gerar Pix (pagar depois)</button></form>
+<form method="post" action="/checkout/${pref.id}/pay"><input type="hidden" name="result" value="approved_pix"><button class="ok" id="pix-pagar">Pagar o Pix agora</button></form>`
+    : `<form method="post" action="/checkout/${pref.id}/pay"><input type="hidden" name="result" value="approved"><button class="ok" id="aprovar">Aprovar pagamento (APRO)</button></form>
+<form method="post" action="/checkout/${pref.id}/pay"><input type="hidden" name="result" value="rejected"><button class="no" id="recusar">Recusar pagamento (OTHE)</button></form>`;
   return `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mercado Pago (SIMULADOR)</title>
 <style>body{font-family:system-ui;background:#ededed;margin:0;padding:24px}main{max-width:420px;margin:auto;background:#fff;border-radius:12px;padding:24px}
 .tag{background:#ffe600;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:700}button{width:100%;padding:14px;margin-top:10px;border:0;border-radius:8px;font-size:16px;cursor:pointer}
 .ok{background:#009ee3;color:#fff}.no{background:#eee}li{margin:4px 0}</style>
-<main><span class="tag">SIMULADOR LOCAL — NÃO É O MERCADO PAGO</span><h1>Pagar com cartão</h1>
+<main><span class="tag">SIMULADOR LOCAL — NÃO É O MERCADO PAGO</span><h1>${pixOnly ? "Pagar com Pix" : "Pagar com cartão"}</h1>
 <ul>${pref.items.map((i) => `<li>${i.title}: R$ ${i.unit_price.toFixed(2)}</li>`).join("")}</ul>
 <p><strong>Total: R$ ${total.toFixed(2)}</strong> · parcelas: ${pref.payment_methods?.installments ?? "?"}</p>
-<form method="post" action="/checkout/${pref.id}/pay"><input type="hidden" name="result" value="approved"><button class="ok" id="aprovar">Aprovar pagamento (APRO)</button></form>
-<form method="post" action="/checkout/${pref.id}/pay"><input type="hidden" name="result" value="rejected"><button class="no" id="recusar">Recusar pagamento (OTHE)</button></form>
+${buttons}
 </main></html>`;
 }
 
@@ -112,33 +113,6 @@ const server = http.createServer(async (req, res) => {
 
   try {
     // ---- API ----------------------------------------------------------------
-    if (req.method === "POST" && p === "/v1/payments") {
-      const body = await readBody(req);
-      const key = req.headers["x-idempotency-key"];
-      requests.push({ method: "POST", path: p, body, idempotencyKey: key });
-      if (key && idempotency.has(key)) return send(res, 201, idempotency.get(key));
-      if (!body.payer?.email) return send(res, 400, { message: "payer.email must be a valid email" });
-      if (body.payment_method_id !== "pix") return send(res, 400, { message: "only pix in mock" });
-      const pay = newPayment({
-        transaction_amount: body.transaction_amount,
-        description: body.description,
-        external_reference: body.external_reference,
-        payment_method_id: "pix",
-        payment_type_id: "bank_transfer",
-        date_of_expiration: body.date_of_expiration,
-        point_of_interaction: {
-          type: "PIX",
-          transaction_data: {
-            qr_code: `00020126580014br.gov.bcb.pix0136${randomUUID()}5204000053039865406${Number(body.transaction_amount).toFixed(2)}5802BR5913SIMULADOR MP6009SAO PAULO62070503***6304ABCD`,
-            qr_code_base64: QR_BASE64,
-            ticket_url: `${SELF}/pix/${nextId - 1}`,
-          },
-        },
-      });
-      if (key) idempotency.set(key, pay);
-      return send(res, 201, pay);
-    }
-
     if (req.method === "POST" && p.replace(/\/$/, "") === "/checkout/preferences") {
       const body = await readBody(req);
       const key = req.headers["x-idempotency-key"];
@@ -183,15 +157,17 @@ const server = http.createServer(async (req, res) => {
       const pref = preferences.get(m[1]);
       const { result } = await readBody(req);
       const total = pref.items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+      const pix = result === "pix_pending" || result === "approved_pix";
       const pay = newPayment({
         transaction_amount: Math.round(total * 100) / 100,
         external_reference: pref.external_reference,
-        payment_method_id: "master",
-        payment_type_id: "credit_card",
+        payment_method_id: pix ? "pix" : "master",
+        payment_type_id: pix ? "bank_transfer" : "credit_card",
+        date_of_expiration: pref.expiration_date_to,
       });
-      setStatus(pay, result === "approved" ? "approved" : "rejected");
+      if (result !== "pix_pending") setStatus(pay, result.startsWith("approved") ? "approved" : "rejected");
       await notify(pay.id);
-      const back = result === "approved" ? pref.back_urls.success : pref.back_urls.failure;
+      const back = pay.status === "approved" ? pref.back_urls.success : pay.status === "pending" ? pref.back_urls.pending : pref.back_urls.failure;
       res.writeHead(302, { Location: `${back}?payment_id=${pay.id}&status=${pay.status}&external_reference=${pref.external_reference}` });
       return res.end();
     }
@@ -223,10 +199,6 @@ const server = http.createServer(async (req, res) => {
       requests.length = 0;
       return send(res, 200, { ok: true });
     }
-    // Página do Pix (ticket_url) simulada.
-    m = p.match(/^\/pix\/(\d+)$/);
-    if (m) return send(res, 200, `<p>Pix simulado ${m[1]}</p>`);
-
     send(res, 404, { message: "not found" });
   } catch (err) {
     send(res, 500, { message: err.message });

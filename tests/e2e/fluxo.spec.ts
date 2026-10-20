@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { db, fillStep1, loginAdmin, mockPayment, mockState, readyEvent } from "./helpers";
+import { createPurchaseViaApi, db, fillStep1, loginAdmin, mockPayment, mockState, payViaMock, readyEvent } from "./helpers";
 
 test.beforeEach(async () => {
   await readyEvent();
@@ -35,30 +35,40 @@ test("4/5. formulário bloqueia campos vazios, nome só com espaços e falta de 
   await expect(page.getByText("Confira seu pedido")).toHaveCount(0);
 });
 
-test("1/6/8/11. compra feminina por Pix: QR Code, webhook repetido e confirmação na tela", async ({ page }) => {
+test("1/6/8/11. compra feminina por Pix no Checkout Pro: pendente, webhook repetido e confirmação na tela", async ({ page }) => {
   await fillStep1(page, "Ana Beatriz Moreira", "Feminino");
   await expect(page.locator(".summary")).toContainText("R$ 20,00");
   await expect(page.locator(".summary")).toContainText("(42) 99999-8888");
   await expect(page.locator(".summary")).toContainText("Taxa de serviço");
   await expect(page.locator(".summary .total")).toContainText("R$ 23,00");
-  await page.getByLabel("E-mail para o Pix").fill("ana@example.com");
-  await page.getByRole("button", { name: "Gerar Pix de R$ 23,00" }).click();
+  // Pix não pede e-mail: o comprador digita o que for preciso direto no Mercado Pago.
+  await expect(page.getByLabel("E-mail para o Pix")).toHaveCount(0);
+  await page.getByRole("button", { name: "Pagar R$ 23,00 com Pix" }).click();
 
-  await expect(page.getByRole("heading", { name: /Aguardando pagamento/ })).toBeVisible();
-  await expect(page.getByAltText("QR Code do Pix")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Copiar código Pix" })).toBeVisible();
-
-  const [purchase] = await db`SELECT id, mp_payment_id, amount_cents, status FROM purchases`;
-  expect(purchase.amount_cents).toBe(2300);
-  expect(purchase.status).toBe("pending");
-  // O app enviou ao Mercado Pago o valor do banco e uma chave de idempotência.
+  // Redirecionado ao checkout do Mercado Pago (simulado), só com Pix.
+  await expect(page.getByText("SIMULADOR LOCAL")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pagar com Pix" })).toBeVisible();
+  const [purchase] = await db`SELECT id, amount_cents, status FROM purchases`;
+  expect(purchase).toMatchObject({ amount_cents: 2300, status: "pending" });
   const state = await mockState();
-  const call = state.requests.find((r: { path: string }) => r.path === "/v1/payments");
-  expect(call.body.transaction_amount).toBe(23);
-  expect(call.idempotencyKey).toBe(`pix-${purchase.id}`);
+  const pref = state.preferences[0];
+  expect(pref.items.map((i: { unit_price: number }) => i.unit_price)).toEqual([20, 3]);
+  const excluded = pref.payment_methods.excluded_payment_types.map((t: { id: string }) => t.id);
+  expect(excluded).toContain("credit_card");
+  expect(excluded).not.toContain("bank_transfer"); // Pix é "bank_transfer" no Mercado Pago
+  expect(pref.external_reference).toBe(purchase.id);
+  const call = state.requests.find((r: { path: string }) => r.path.startsWith("/checkout/preferences"));
+  expect(call.idempotencyKey).toBe(`pref-${purchase.id}`);
+
+  // O comprador gera o Pix e volta ao site para esperar: pendente, nada confirmado.
+  await page.locator("#pix-gerar").click();
+  await expect(page.getByRole("heading", { name: /Aguardando pagamento/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Ir para o Pix no Mercado Pago/ })).toBeVisible();
+  expect((await db`SELECT status FROM purchases`)[0].status).toBe("pending");
 
   // Mercado Pago aprova e envia o mesmo webhook 3 vezes.
-  const r = await mockPayment(purchase.mp_payment_id, { status: "approved", times: 3 });
+  const [pay] = await db`SELECT mp_payment_id FROM payments`;
+  const r = await mockPayment(pay.mp_payment_id, { status: "approved", times: 3 });
   expect(r.webhookStatuses).toEqual([200, 200, 200]);
   await expect(page.getByRole("heading", { name: "Pagamento aprovado!" })).toBeVisible({ timeout: 20_000 });
 
@@ -66,7 +76,7 @@ test("1/6/8/11. compra feminina por Pix: QR Code, webhook repetido e confirmaç�
   expect(rows).toHaveLength(1);
   expect(rows[0].status).toBe("confirmed");
   const events = await db`SELECT result FROM webhook_events ORDER BY id`;
-  expect(events.map((e) => e.result)).toEqual(["confirmed", "already_confirmed", "already_confirmed"]);
+  expect(events.map((e) => e.result)).toEqual(["updated", "confirmed", "already_confirmed", "already_confirmed"]);
 });
 
 test("2/7. compra masculina por cartão: redireciona ao checkout e volta aprovado", async ({ page }) => {
@@ -78,6 +88,9 @@ test("2/7. compra masculina por cartão: redireciona ao checkout e volta aprovad
   await expect(page.getByText("SIMULADOR LOCAL")).toBeVisible();
   await expect(page.getByText("Taxa de serviço: R$ 3.00")).toBeVisible();
   await expect(page.getByText("parcelas: 1")).toBeVisible();
+  const pref = (await mockState()).preferences[0];
+  expect(pref.payment_methods.excluded_payment_types.map((t: { id: string }) => t.id)).toContain("bank_transfer");
+  expect(pref.binary_mode).toBe(true);
   await page.locator("#aprovar").click();
 
   await expect(page.getByRole("heading", { name: "Pagamento aprovado!" })).toBeVisible({ timeout: 20_000 });
@@ -90,19 +103,24 @@ test("10. cartão recusado mostra o estado e não entra na lista", async ({ page
   await page.getByRole("radio", { name: /Cartão/ }).check();
   await page.getByRole("button", { name: /com cartão/ }).click();
   await page.locator("#recusar").click();
-  await expect(page.getByText("Pagamento recusado.")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("O último pagamento não foi concluído")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("link", { name: "Ir para o Mercado Pago" })).toBeVisible();
   const [row] = await db`SELECT status, payment_status FROM purchases`;
   expect(row).toMatchObject({ status: "pending", payment_status: "rejected" });
 });
 
-test("9. Pix pendente continua aguardando e expira quando o MP cancela", async ({ page }) => {
+test("9. Pix pendente continua aguardando; se o MP cancelar, pode tentar de novo; vencida a reserva, expira", async ({ page }) => {
   await fillStep1(page, "Julia Fernandes Rocha", "Feminino");
-  await page.getByLabel("E-mail para o Pix").fill("julia@example.com");
-  await page.getByRole("button", { name: /Gerar Pix/ }).click();
+  await page.getByRole("button", { name: /com Pix/ }).click();
+  await page.locator("#pix-gerar").click();
   await expect(page.getByRole("heading", { name: /Aguardando pagamento/ })).toBeVisible();
-  const [p] = await db`SELECT mp_payment_id FROM purchases`;
-  await mockPayment(p.mp_payment_id, { status: "cancelled", status_detail: "expired" });
+
+  const [pay] = await db`SELECT mp_payment_id FROM payments`;
+  await mockPayment(pay.mp_payment_id, { status: "cancelled", status_detail: "expired" });
+  await expect(page.getByText("O último pagamento não foi concluído")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("link", { name: /Ir para o Pix no Mercado Pago/ })).toBeVisible();
+
+  await db`UPDATE purchases SET expires_at = now() - interval '1 minute'`;
   await expect(page.getByRole("heading", { name: "Pagamento expirado" })).toBeVisible({ timeout: 20_000 });
 });
 
@@ -110,10 +128,10 @@ test("12. comprador fecha o navegador antes da confirmação: webhook confirma m
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await fillStep1(page, "Larissa Campos Dias", "Feminino");
-  await page.getByLabel("E-mail para o Pix").fill("larissa@example.com");
-  await page.getByRole("button", { name: /Gerar Pix/ }).click();
-  await expect(page.getByAltText("QR Code do Pix")).toBeVisible();
-  const [p] = await db`SELECT id, mp_payment_id FROM purchases`;
+  await page.getByRole("button", { name: /com Pix/ }).click();
+  await page.locator("#pix-gerar").click();
+  await expect(page.getByRole("heading", { name: /Aguardando pagamento/ })).toBeVisible();
+  const [p] = await db`SELECT purchases.id, payments.mp_payment_id FROM purchases JOIN payments ON payments.purchase_id = purchases.id`;
   await ctx.close(); // fechou o navegador
 
   await mockPayment(p.mp_payment_id, { status: "approved" });
@@ -132,7 +150,6 @@ test("13. API ignora preço adulterado e bloqueia requisições de outra origem 
     termsVersionId: settings.t,
     paymentMethod: "pix",
     buyerPhone: "42999998888",
-    payerEmail: "h@example.com",
     amountCents: 1,
     priceCents: 1,
   };
@@ -143,8 +160,8 @@ test("13. API ignora preço adulterado e bloqueia requisições de outra origem 
   expect(res.status()).toBe(201);
   const json = await res.json();
   expect(json.purchase.amountCents).toBe(3300);
-  const state = await mockState();
-  expect(state.requests.at(-1).body.transaction_amount).toBe(33);
+  const pref = (await mockState()).preferences.at(-1);
+  expect(pref.items.map((i: { unit_price: number }) => i.unit_price)).toEqual([30, 3]);
 
   const minor = await request.post("/api/purchases", {
     data: { ...body, clientRequestId: crypto.randomUUID(), adultConfirmed: false },
@@ -154,38 +171,22 @@ test("13. API ignora preço adulterado e bloqueia requisições de outra origem 
   expect((await minor.json()).error.message).toContain("18 anos");
 });
 
-test("webhook com assinatura inválida é recusado e registrado", async ({ page }) => {
-  await fillStep1(page, "Rafael Gomes Teixeira", "Masculino");
-  await page.getByLabel("E-mail para o Pix").fill("rafa@example.com");
-  await page.getByRole("button", { name: /Gerar Pix/ }).click();
-  await expect(page.getByAltText("QR Code do Pix")).toBeVisible();
-  const [p] = await db`SELECT mp_payment_id FROM purchases`;
-  // Pagamento aprovado no MP, mas o webhook chega com assinatura forjada e a página não consulta o MP neste intervalo.
-  const r = await mockPayment(p.mp_payment_id, { status: "approved", badSignature: true });
+test("webhook com assinatura inválida é recusado, registrado e não confirma a compra", async ({ request, baseURL }) => {
+  const purchase = await createPurchaseViaApi(request, baseURL!, { name: "Rafael Gomes Teixeira", category: "masculino" });
+  // O pagamento foi aprovado no Mercado Pago, mas o webhook chega com assinatura forjada.
+  const r = await payViaMock(purchase, "approved", { badSignature: true });
   expect(r.webhookStatuses).toEqual([401]);
   const [ev] = await db`SELECT signature_ok, result FROM webhook_events`;
   expect(ev.signature_ok).toBe(false);
+  expect(ev.result).toMatch(/^invalid_signature/);
+  const [row] = await db`SELECT status FROM purchases WHERE id = ${purchase.id}`;
+  expect(row.status).toBe("pending");
 });
 
 test("valor divergente no pagamento não confirma a compra", async ({ request, baseURL }) => {
-  const [settings] = await db`SELECT current_terms_version_id AS t FROM settings`;
-  const res = await request.post("/api/purchases", {
-    headers: { Origin: baseURL! },
-    data: {
-      clientRequestId: crypto.randomUUID(),
-      fullName: "Bruno Costa Nunes",
-      categoryId: "masculino",
-      adultConfirmed: true,
-      termsAccepted: true,
-      termsVersionId: settings.t,
-      paymentMethod: "pix",
-      buyerPhone: "42999998888",
-      payerEmail: "b@example.com",
-    },
-  });
-  const { purchase } = await res.json();
-  const [p] = await db`SELECT mp_payment_id FROM purchases WHERE id = ${purchase.id}`;
-  await mockPayment(p.mp_payment_id, { status: "approved", transaction_amount: 1 });
+  const purchase = await createPurchaseViaApi(request, baseURL!, { name: "Bruno Costa Nunes", category: "masculino" });
+  const r = await payViaMock(purchase, "approved", { transaction_amount: 1 });
+  expect(r.webhookStatuses).toEqual([200]);
   const [row] = await db`SELECT status, attention FROM purchases WHERE id = ${purchase.id}`;
   expect(row).toMatchObject({ status: "pending", attention: "amount_mismatch" });
 });
@@ -216,9 +217,8 @@ test("18. vendas fechadas: página e API recusam compras", async ({ page, reques
 test("19. lotação: com 1 vaga reservada, o próximo comprador vê 'esgotado'", async ({ page }) => {
   await readyEvent({ capacity: 1 });
   await fillStep1(page, "Primeira Pessoa Teste", "Feminino");
-  await page.getByLabel("E-mail para o Pix").fill("p1@example.com");
-  await page.getByRole("button", { name: /Gerar Pix/ }).click();
-  await expect(page.getByAltText("QR Code do Pix")).toBeVisible();
+  await page.getByRole("button", { name: /com Pix/ }).click();
+  await expect(page.getByText("SIMULADOR LOCAL")).toBeVisible();
   await page.goto("/comprar");
   await expect(page.getByRole("heading", { name: "Ingressos esgotados" })).toBeVisible();
 });
@@ -238,20 +238,15 @@ test.describe("painel administrativo", () => {
     expect(login.status()).toBe(401);
   });
 
-  test("15/17/20. busca por nome, dashboard, lista impressa e CSV (no celular)", async ({ page }) => {
+  test("15/17/20. busca por nome, dashboard, lista impressa e CSV (no celular)", async ({ page, request, baseURL }) => {
     // Duas compras confirmadas e uma pendente.
-    for (const [name, cat] of [
-      ["Ana Clara Ribeiro", "Feminino"],
-      ["Otávio Mendes Luz", "Masculino"],
-      ["Zé Pendente Silva", "Masculino"],
+    for (const [name, cat, paid] of [
+      ["Ana Clara Ribeiro", "feminino", true],
+      ["Otávio Mendes Luz", "masculino", true],
+      ["Zé Pendente Silva", "masculino", false],
     ] as const) {
-      await fillStep1(page, name, cat);
-      await page.getByLabel("E-mail para o Pix").fill("x@example.com");
-      await page.getByRole("button", { name: /Gerar Pix/ }).click();
-      await expect(page.getByAltText("QR Code do Pix")).toBeVisible();
-    }
-    for (const p of await db`SELECT mp_payment_id FROM purchases WHERE full_name <> 'Zé Pendente Silva'`) {
-      await mockPayment(p.mp_payment_id, { status: "approved" });
+      const purchase = await createPurchaseViaApi(request, baseURL!, { name, category: cat });
+      if (paid) await payViaMock(purchase, "approved");
     }
 
     await loginAdmin(page);
@@ -284,13 +279,9 @@ test.describe("painel administrativo", () => {
     expect(overflow).toBe(false);
   });
 
-  test("transferência: organização troca o nome e a lista impressa já mostra a nova pessoa", async ({ page }) => {
-    await fillStep1(page, "Fernanda Lopes Prado", "Feminino");
-    await page.getByLabel("E-mail para o Pix").fill("f@example.com");
-    await page.getByRole("button", { name: /Gerar Pix/ }).click();
-    await expect(page.getByAltText("QR Code do Pix")).toBeVisible();
-    const [p] = await db`SELECT id, mp_payment_id FROM purchases`;
-    await mockPayment(p.mp_payment_id, { status: "approved" });
+  test("transferência: organização troca o nome e a lista impressa já mostra a nova pessoa", async ({ page, request, baseURL }) => {
+    const p = await createPurchaseViaApi(request, baseURL!, { name: "Fernanda Lopes Prado" });
+    await payViaMock(p, "approved");
 
     await loginAdmin(page);
     await page.goto(`/admin/compras/${p.id}`);

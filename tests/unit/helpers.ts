@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSql } from "@/server/db";
-import type { MercadoPagoClient, MpPayment, PixInput, PreferenceInput } from "@/server/mercadopago";
+import type { MercadoPagoClient, MpPayment, PreferenceInput } from "@/server/mercadopago";
 import type { PurchaseRequest } from "@/lib/validation";
 
 export const sql = () => getSql();
@@ -40,30 +40,12 @@ export async function resetDb(opts: { capacity?: number | null; salesOpen?: bool
 /** Cliente falso do Mercado Pago que guarda os pagamentos em memória. */
 export class FakeMp implements MercadoPagoClient {
   payments = new Map<string, MpPayment>();
-  pixCalls: PixInput[] = [];
   prefCalls: PreferenceInput[] = [];
   refunds: string[] = [];
   fail = false;
   private seq = 5000;
 
-  async createPixPayment(input: PixInput): Promise<MpPayment> {
-    if (this.fail) throw new Error("MP fora do ar");
-    this.pixCalls.push(input);
-    const p: MpPayment = {
-      id: this.seq++,
-      status: "pending",
-      status_detail: "pending_waiting_transfer",
-      external_reference: input.purchaseId,
-      transaction_amount: input.amountCents / 100,
-      currency_id: "BRL",
-      payment_method_id: "pix",
-      date_of_expiration: input.expiresAt.toISOString(),
-      point_of_interaction: { transaction_data: { qr_code: "000201PIX", qr_code_base64: "iVBOR", ticket_url: null } },
-    };
-    this.payments.set(String(p.id), p);
-    return p;
-  }
-  async createCardPreference(input: PreferenceInput) {
+  async createCheckoutPreference(input: PreferenceInput) {
     if (this.fail) throw new Error("MP fora do ar");
     this.prefCalls.push(input);
     return { id: `pref-${input.purchaseId}`, init_point: `https://mp.example/checkout/${input.purchaseId}` };
@@ -74,27 +56,36 @@ export class FakeMp implements MercadoPagoClient {
     return { ...p };
   }
   async searchPaymentsByReference(ref: string) {
-    return [...this.payments.values()].filter((p) => p.external_reference === ref);
+    return [...this.payments.values()].filter((p) => p.external_reference === ref).map((p) => ({ ...p }));
   }
   async refundPayment(id: string) {
     this.refunds.push(id);
     const p = this.payments.get(id)!;
     p.status = "refunded";
   }
-  /** Simula um pagamento de cartão feito no Checkout Pro. */
-  cardPayment(purchaseId: string, amountCents: number, status: string): MpPayment {
+  /** Simula uma tentativa de pagamento feita pelo comprador no Checkout Pro (Pix ou cartão). */
+  pay(
+    purchase: { id: string; amount_cents: number; payment_method: string },
+    status: string,
+    over: Partial<MpPayment> = {},
+  ): MpPayment {
+    const pix = purchase.payment_method === "pix";
     const p: MpPayment = {
       id: this.seq++,
       status,
-      external_reference: purchaseId,
-      transaction_amount: amountCents / 100,
+      status_detail: status === "pending" ? "pending_waiting_transfer" : undefined,
+      external_reference: purchase.id,
+      transaction_amount: purchase.amount_cents / 100,
       currency_id: "BRL",
-      payment_method_id: "master",
+      payment_method_id: pix ? "pix" : "master",
+      payment_type_id: pix ? "bank_transfer" : "credit_card",
       date_approved: status === "approved" ? new Date().toISOString() : null,
+      ...over,
     };
     this.payments.set(String(p.id), p);
-    return p;
+    return { ...p };
   }
+  /** Atualiza o estado de um pagamento existente (como o Mercado Pago faz depois). */
   set(id: string | number, status: string, extra: Partial<MpPayment> = {}) {
     const p = this.payments.get(String(id))!;
     Object.assign(p, { status, ...extra });
@@ -113,7 +104,6 @@ export function request(termsVersionId: number, over: Partial<PurchaseRequest> =
     termsVersionId,
     paymentMethod: "pix",
     buyerPhone: "(42) 99999-8888",
-    payerEmail: "maria@example.com",
     ...over,
   };
 }

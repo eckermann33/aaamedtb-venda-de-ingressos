@@ -1,10 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { PAYMENT_WINDOW_MINUTES } from "@/config/event";
+import { PAYMENT_WINDOW_MINUTES, RESERVATION_GRACE_MINUTES } from "@/config/event";
 import { phoneDigits } from "@/lib/contact";
 import { cleanName, searchableName, validateFullName, type PurchaseRequest } from "@/lib/validation";
 import type { Sql, TxSql } from "./db";
 import { errorInfo, logger } from "./logger";
-import { MercadoPagoError, type MercadoPagoClient, type MpPayment } from "./mercadopago";
+import type { MercadoPagoClient, MpPayment } from "./mercadopago";
 import { loadSettings, readiness } from "./settings";
 
 export type PurchaseStatus = "pending" | "confirmed" | "rejected" | "cancelled" | "expired" | "refunded" | "failed";
@@ -26,10 +26,6 @@ export type PurchaseRow = {
   mp_payment_id: string | null;
   mp_preference_id: string | null;
   checkout_url: string | null;
-  pix_qr_code: string | null;
-  pix_qr_code_base64: string | null;
-  pix_ticket_url: string | null;
-  pix_expires_at: Date | null;
   ticket_code: string | null;
   expires_at: Date;
   confirmed_at: Date | null;
@@ -98,17 +94,13 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
   if (!buyerPhone) {
     throw new PurchaseError("invalid_phone", "Informe um celular/WhatsApp com DDD, só com números.", 400);
   }
-  if (input.paymentMethod === "pix" && !input.payerEmail) {
-    throw new PurchaseError("email_required", "Informe um e-mail para gerar o Pix.", 400);
-  }
   const fullName = cleanName(input.fullName);
 
   const existing = await findByClientRequestId(sql, input.clientRequestId);
   if (existing) return sameRequestOrThrow(existing, fullName, input);
 
   const windowMs = PAYMENT_WINDOW_MINUTES * 60_000;
-  // A reserva dura um pouco mais que o prazo de pagamento para absorver atrasos de notificação.
-  const reservationMs = windowMs + 5 * 60_000;
+  const reservationMs = windowMs + RESERVATION_GRACE_MINUTES * 60_000;
 
   const purchase = await sql.begin(async (tx) => {
     // Trava a linha de configuração: serializa reservas e respeita a lotação mesmo com compras simultâneas.
@@ -163,44 +155,22 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
   const title = `Ingresso ${settings.event.name} — ${purchase.category_label}`;
 
   try {
-    if (purchase.payment_method === "pix") {
-      const payment = await mp.createPixPayment({
-        purchaseId: purchase.id,
-        amountCents: purchase.amount_cents,
-        description: purchase.fee_cents > 0 ? `${title} (inclui taxa de serviço)` : title,
-        payerEmail: input.payerEmail!,
-        expiresAt: new Date(Date.now() + windowMs),
-      });
-      const data = payment.point_of_interaction?.transaction_data;
-      if (!data?.qr_code) throw new MercadoPagoError("Resposta do Pix sem QR Code", 0);
-      await sql`
-        UPDATE purchases SET
-          mp_payment_id = ${String(payment.id)},
-          pix_qr_code = ${data.qr_code},
-          pix_qr_code_base64 = ${data.qr_code_base64 ?? null},
-          pix_ticket_url = ${data.ticket_url ?? null},
-          pix_expires_at = ${payment.date_of_expiration ? new Date(payment.date_of_expiration) : new Date(Date.now() + windowMs)},
-          payment_status = ${payment.status},
-          updated_at = now()
-        WHERE id = ${purchase.id}
-      `;
-      await applyPayment(sql, payment);
-    } else {
-      const preference = await mp.createCardPreference({
-        purchaseId: purchase.id,
-        ticketPriceCents: purchase.ticket_price_cents,
-        feeCents: purchase.fee_cents,
-        title,
-        categoryId: purchase.category_id,
-        expiresAt: new Date(Date.now() + windowMs),
-        backUrl: `${deps.appUrl}/pedido/${purchase.id}`,
-        statementDescriptor: settings.event.statementDescriptor,
-      });
-      await sql`
-        UPDATE purchases SET mp_preference_id = ${preference.id}, checkout_url = ${preference.init_point}, updated_at = now()
-        WHERE id = ${purchase.id}
-      `;
-    }
+    // Pix e cartão usam o Checkout Pro: o comprador é levado ao ambiente do Mercado Pago.
+    const preference = await mp.createCheckoutPreference({
+      method: purchase.payment_method,
+      purchaseId: purchase.id,
+      ticketPriceCents: purchase.ticket_price_cents,
+      feeCents: purchase.fee_cents,
+      title,
+      categoryId: purchase.category_id,
+      expiresAt: new Date(Date.now() + windowMs),
+      backUrl: `${deps.appUrl}/pedido/${purchase.id}`,
+      statementDescriptor: settings.event.statementDescriptor,
+    });
+    await sql`
+      UPDATE purchases SET mp_preference_id = ${preference.id}, checkout_url = ${preference.init_point}, updated_at = now()
+      WHERE id = ${purchase.id}
+    `;
   } catch (err) {
     logger.error("Falha ao iniciar pagamento no Mercado Pago", { purchaseId: purchase.id, ...errorInfo(err) });
     await sql`UPDATE purchases SET status = 'failed', updated_at = now() WHERE id = ${purchase.id} AND status = 'pending'`;
@@ -266,9 +236,6 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
     let validationError: string | null = null;
     if (amountCents !== purchase.amount_cents) validationError = "amount_mismatch";
     else if (payment.currency_id && payment.currency_id !== "BRL") validationError = "currency_mismatch";
-    else if (purchase.payment_method === "pix" && purchase.mp_payment_id && purchase.mp_payment_id !== paymentId) {
-      validationError = "payment_id_mismatch";
-    }
 
     await tx`
       INSERT INTO payments (mp_payment_id, purchase_id, status, status_detail, amount_cents, currency,
@@ -354,12 +321,6 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
           if (left.n === 0 && purchase.attention !== "in_mediation") {
             await tx`UPDATE purchases SET attention = NULL, updated_at = now() WHERE id = ${purchase.id}`;
           }
-          if (purchase.status === "pending" && purchase.payment_method === "pix") {
-            await tx`
-              UPDATE purchases SET status = 'refunded', payment_status = ${payment.status}, refunded_at = now(), updated_at = now()
-              WHERE id = ${purchase.id}
-            `;
-          }
         }
         return "updated" as const;
       }
@@ -367,22 +328,12 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
       case "rejected":
       case "cancelled": {
         if (purchase.status !== "pending") return "ignored" as const;
-        if (purchase.payment_method === "pix" && isConfirmingPayment) {
-          const next =
-            payment.status === "rejected" ? "rejected" : payment.status_detail === "expired" ? "expired" : "cancelled";
-          await tx`
-            UPDATE purchases SET status = ${next}, payment_status = ${payment.status},
-              payment_status_detail = ${payment.status_detail ?? null}, updated_at = now()
-            WHERE id = ${purchase.id}
-          `;
-        } else {
-          // Cartão: o comprador pode tentar outro cartão enquanto a reserva estiver válida.
-          await tx`
-            UPDATE purchases SET payment_status = ${payment.status},
-              payment_status_detail = ${payment.status_detail ?? null}, updated_at = now()
-            WHERE id = ${purchase.id}
-          `;
-        }
+        // O comprador pode tentar de novo (outro cartão, novo Pix) enquanto a reserva estiver válida.
+        await tx`
+          UPDATE purchases SET payment_status = ${payment.status},
+            payment_status_detail = ${payment.status_detail ?? null}, updated_at = now()
+          WHERE id = ${purchase.id}
+        `;
         return "updated" as const;
       }
 
@@ -442,15 +393,11 @@ export async function reconcilePurchase(
   if (!purchase) return;
 
   try {
-    let payments: MpPayment[] = [];
-    if (purchase.payment_method === "pix" && purchase.mp_payment_id) {
-      payments = [await mp.getPayment(purchase.mp_payment_id)];
-    } else if (purchase.payment_method === "card") {
-      payments = await mp.searchPaymentsByReference(purchase.id);
-      if (opts.hintPaymentId && /^\d{1,20}$/.test(opts.hintPaymentId) && !payments.some((p) => String(p.id) === opts.hintPaymentId)) {
-        const hinted = await mp.getPayment(opts.hintPaymentId);
-        if (hinted.external_reference === purchase.id) payments.push(hinted);
-      }
+    // Uma compra pode ter várias tentativas de pagamento: busca todas pela referência externa.
+    const payments: MpPayment[] = await mp.searchPaymentsByReference(purchase.id);
+    if (opts.hintPaymentId && /^\d{1,20}$/.test(opts.hintPaymentId) && !payments.some((p) => String(p.id) === opts.hintPaymentId)) {
+      const hinted = await mp.getPayment(opts.hintPaymentId);
+      if (hinted.external_reference === purchase.id) payments.push(hinted);
     }
     // Processa aprovados por último para que prevaleçam sobre tentativas recusadas.
     payments.sort((a, b) => Number(a.status === "approved") - Number(b.status === "approved"));
@@ -502,7 +449,6 @@ export type PublicPurchase = {
   expiresAt: string;
   confirmedAt: string | null;
   checkoutUrl: string | null;
-  pix: { qrCode: string; qrCodeBase64: string | null; ticketUrl: string | null; expiresAt: string | null } | null;
 };
 
 export function publicState(p: PurchaseRow, now = new Date()): PublicState {
@@ -522,9 +468,9 @@ export function publicState(p: PurchaseRow, now = new Date()): PublicState {
     case "pending": {
       if (p.attention === "over_capacity" || p.attention === "amount_mismatch") return "attention";
       if (p.expires_at < now) return p.payment_status === "rejected" ? "rejected" : "expired";
-      if (p.payment_status === "rejected") return "payment_rejected";
-      if (p.payment_method === "pix" && !p.pix_qr_code) return "preparing";
-      if (p.payment_method === "card" && !p.checkout_url) return "preparing";
+      // Última tentativa não concluída (recusada, cancelada ou Pix expirado): pode tentar de novo.
+      if (p.payment_status === "rejected" || p.payment_status === "cancelled") return "payment_rejected";
+      if (!p.checkout_url) return "preparing";
       return "awaiting_payment";
     }
   }
@@ -542,18 +488,10 @@ export function toPublic(p: PurchaseRow): PublicPurchase {
     amountCents: p.amount_cents,
     paymentMethod: p.payment_method,
     state,
-    expiresAt: p.expires_at.toISOString(),
+    // Prazo mostrado ao comprador (a reserva interna dura um pouco mais).
+    expiresAt: new Date(p.expires_at.getTime() - RESERVATION_GRACE_MINUTES * 60_000).toISOString(),
     confirmedAt: p.confirmed_at?.toISOString() ?? null,
-    checkoutUrl: awaiting && p.payment_method === "card" ? p.checkout_url : null,
-    pix:
-      awaiting && p.payment_method === "pix" && p.pix_qr_code
-        ? {
-            qrCode: p.pix_qr_code,
-            qrCodeBase64: p.pix_qr_code_base64,
-            ticketUrl: p.pix_ticket_url,
-            expiresAt: p.pix_expires_at?.toISOString() ?? null,
-          }
-        : null,
+    checkoutUrl: awaiting ? p.checkout_url : null,
   };
 }
 
@@ -604,8 +542,7 @@ export const ANONYMIZED_NAME = "Titular removido";
 /** Remove o nome de uma compra (pedido do titular ou fim do prazo de retenção). */
 export async function anonymizePurchase(sql: Sql | TxSql, id: string): Promise<boolean> {
   const rows = await sql`
-    UPDATE purchases SET full_name = ${ANONYMIZED_NAME}, name_search = '', buyer_phone = NULL, pix_qr_code = NULL,
-      pix_qr_code_base64 = NULL, pix_ticket_url = NULL, anonymized_at = now(), updated_at = now()
+    UPDATE purchases SET full_name = ${ANONYMIZED_NAME}, name_search = '', buyer_phone = NULL, anonymized_at = now(), updated_at = now()
     WHERE id = ${id} AND anonymized_at IS NULL
     RETURNING id
   `;
@@ -618,8 +555,7 @@ export async function anonymizePurchase(sql: Sql | TxSql, id: string): Promise<b
  */
 export async function anonymizeAll(sql: Sql): Promise<number> {
   const rows = await sql`
-    UPDATE purchases SET full_name = ${ANONYMIZED_NAME}, name_search = '', buyer_phone = NULL, pix_qr_code = NULL,
-      pix_qr_code_base64 = NULL, pix_ticket_url = NULL, anonymized_at = now(), updated_at = now()
+    UPDATE purchases SET full_name = ${ANONYMIZED_NAME}, name_search = '', buyer_phone = NULL, anonymized_at = now(), updated_at = now()
     WHERE anonymized_at IS NULL AND NOT (status = 'pending' AND expires_at > now())
     RETURNING id
   `;

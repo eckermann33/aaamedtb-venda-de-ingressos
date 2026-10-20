@@ -92,5 +92,8 @@ export const DEFAULT_CATEGORIES = [
 /** Taxa de serviço por ingresso (em centavos). Alterável no painel. */
 export const DEFAULT_SERVICE_FEE_CENTS = 300;
 
-/** Tempo que uma vaga fica reservada enquanto o pagamento está pendente. */
+/** Tempo que o comprador tem para pagar (o checkout do Mercado Pago expira junto). */
 export const PAYMENT_WINDOW_MINUTES = 30;
+
+/** A vaga fica reservada um pouco além do prazo, para absorver atrasos de notificação. */
+export const RESERVATION_GRACE_MINUTES = 5;

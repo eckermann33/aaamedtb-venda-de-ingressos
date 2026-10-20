@@ -3,7 +3,7 @@
 Plataforma de venda de ingressos da **Associação Atlética Acadêmica de Medicina de Telêmaco Borba — Invictus (A.A.A.MED.TB)**.
 
 - Página do evento com a identidade do cartaz (preto + verde neon + Puma).
-- Compra em 2 etapas: dados → pagamento (**Pix com QR Code no próprio site** ou **cartão de crédito no Checkout Pro do Mercado Pago**).
+- Compra em 2 etapas: dados → pagamento (**Pix** ou **cartão de crédito**, ambos pelo **Checkout Pro** do Mercado Pago, que abre o checkout oficial deles e devolve o comprador ao site).
 - Preço + **taxa de serviço de R$ 3,00** (configurável), sempre exibidos separadamente antes de pagar.
 - Confirmação **só pelo servidor** (webhook assinado + consulta à API do Mercado Pago). Voltar para a "página de sucesso" não confirma nada.
 - Banco PostgreSQL com travas contra confirmação dupla, ingresso duplicado e venda acima da lotação.
@@ -58,7 +58,7 @@ Os valores iniciais ficam em [`src/config/event.ts`](src/config/event.ts) e são
 
 - **Next.js 16** (React 19, TypeScript) — site + API no mesmo projeto.
 - **PostgreSQL** — banco de dados (biblioteca `postgres`, consultas parametrizadas).
-- **Mercado Pago** — API REST oficial: `/v1/payments` (Pix), `/checkout/preferences` (Checkout Pro), `/v1/payments/{id}`, `/v1/payments/search`, `/v1/payments/{id}/refunds`.
+- **Mercado Pago** — API REST oficial: `/checkout/preferences` (Checkout Pro, Pix e cartão), `/v1/payments/{id}`, `/v1/payments/search`, `/v1/payments/{id}/refunds`.
 - **Zod** — validação dos dados no servidor.
 - **Vitest** + **Playwright** — testes.
 
@@ -149,15 +149,17 @@ npm run dev
 
 ## 4. Configurar o Mercado Pago
 
-**Modalidades usadas** (ambas oficiais):
+**Modalidade usada: Checkout Pro** (API de **Preferências**, `POST /checkout/preferences`), para Pix e cartão:
 
-- **Pix → Checkout Transparente (API de Pagamentos)**: o QR Code e o "copia e cola" aparecem no nosso site. O Mercado Pago **exige um e-mail do pagador** para gerar o Pix; por isso o formulário pede o e-mail **só quando a pessoa escolhe Pix**. Ele é enviado ao Mercado Pago e **não é salvo** no nosso banco.
-- **Cartão de crédito → Checkout Pro**: a pessoa é levada ao ambiente do Mercado Pago (o site avisa isso), digita o cartão lá e volta. **Nenhum dado de cartão passa pelo nosso servidor.** Configurado com parcela única e só cartão de crédito, para o comprador pagar exatamente o total exibido.
+- O comprador escolhe **Pix** ou **Cartão** no nosso site e é levado ao ambiente do Mercado Pago (o site avisa isso). Lá ele vê o QR Code/copia e cola do Pix ou digita o cartão, e volta para o nosso site.
+- **Nenhum dado de cartão, e-mail ou CPF passa pelo nosso servidor.** Cada preferência oferece só a forma escolhida (Pix **ou** cartão de crédito, em parcela única), para o comprador pagar exatamente o total exibido.
+- Quando o Mercado Pago perguntar qual solução integrar, escolha **Checkout Pro**.
+- A documentação do Mercado Pago também tem a **API de Orders** (`/v1/orders`), recomendada para integrações novas. Mantivemos a API de Preferências porque ela continua suportada e seus campos foram conferidos no SDK oficial; a migração para Orders pode ser feita depois do evento.
 
 ### 4.1. Criar a aplicação
 
 1. Entre em https://www.mercadopago.com.br/developers com a **conta do Mercado Pago que vai receber o dinheiro** (de preferência a conta da Atlética).
-2. **Suas integrações → Criar aplicação**. Tipo de solução: pagamentos online; produto: Checkout Pro/Checkout Transparente (se perguntar a plataforma, escolha que não usa plataforma de e-commerce).
+2. **Suas integrações → Criar aplicação**. Tipo de solução: pagamentos online; produto: **Checkout Pro** (se perguntar a plataforma, escolha que não usa plataforma de e-commerce).
 3. Para receber **Pix**, a conta precisa ter uma **chave Pix cadastrada** no app do Mercado Pago.
 
 ### 4.2. Credenciais de teste e de produção
@@ -333,7 +335,7 @@ A **taxa de serviço de R$ 3,00** entra no faturamento da Atlética (aparece sep
 - Limite de requisições na compra, no status e no login (armazenado no banco, com IP em hash).
 - Auditoria de login, alterações de configuração, abertura/fechamento de vendas, exportações, estornos e anonimizações.
 - Erros técnicos ficam só nos logs do servidor (sem tokens, e-mails, códigos Pix ou dados de cartão).
-- **Coleta mínima**: nome completo, celular/WhatsApp (avisos sobre o evento), categoria, aceite (versão + data/hora) e dados do pagamento. Sem CPF, endereço ou data de nascimento. E-mail do Pix não é armazenado.
+- **Coleta mínima**: nome completo, celular/WhatsApp (avisos sobre o evento), categoria, aceite (versão + data/hora) e dados do pagamento. Sem CPF, endereço ou data de nascimento. O e-mail/CPF digitados no Mercado Pago ficam com ele.
 - Nomes nunca aparecem em páginas públicas; a URL do pedido usa um identificador aleatório.
 - **Retenção**: política padrão de anonimizar nomes em até 90 dias após o evento (configurável). Botão em `/admin/configuracoes` para anonimizar tudo e, em cada compra, para atender pedidos de exclusão do titular. Valores e IDs de pagamento ficam para prestação de contas.
 - Política de privacidade em `/privacidade` — **revise com a diretoria** (é um modelo).
@@ -361,10 +363,9 @@ Comprador            Nosso servidor                         Mercado Pago
    │  dados + categoria  │                                       │
    ├────────────────────►│ valida, calcula preço+taxa no banco    │
    │                     │ trava lotação e cria compra PENDENTE   │
-   │                     ├── cria Pix / preferência (idempotente) ►│
-   │◄── QR Code ou ──────┤                                       │
-   │    redireciona       │                                       │
-   │  paga ──────────────────────────────────────────────────────►│
+   │                     ├── cria preferência Checkout Pro ───────►│
+   │◄── redireciona ─────┤    (idempotente, Pix OU cartão)        │
+   │  paga no Mercado Pago (QR Code do Pix ou cartão) ──────────►│
    │                     │◄──────── webhook assinado ────────────┤
    │                     ├── consulta o pagamento na API ────────►│
    │                     │ confere valor/moeda/referência         │
@@ -372,4 +373,4 @@ Comprador            Nosso servidor                         Mercado Pago
    │◄─ página consulta o servidor e mostra "aprovado" ───────────│
 ```
 
-Estados da compra: `pending` → `confirmed` | `rejected` | `expired` | `cancelled` | `failed`; e `confirmed` → `refunded` (estorno/chargeback). A vaga fica reservada por até 35 minutos enquanto o pagamento está pendente. Se um pagamento for aprovado depois que a lotação acabou, ele **não** entra na lista e aparece no painel como "precisa de atenção" para estorno.
+Estados da compra: `pending` → `confirmed` | `rejected` | `expired` | `cancelled` | `failed`. Uma tentativa recusada, cancelada ou com Pix vencido **não encerra a compra**: o comprador pode tentar de novo enquanto a reserva estiver válida; e `confirmed` → `refunded` (estorno/chargeback). A vaga fica reservada por até 35 minutos enquanto o pagamento está pendente. Se um pagamento for aprovado depois que a lotação acabou, ele **não** entra na lista e aparece no painel como "precisa de atenção" para estorno.

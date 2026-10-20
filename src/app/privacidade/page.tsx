@@ -50,8 +50,8 @@ export default async function PrivacyPage() {
             </li>
           </ul>
           <p>
-            Não pedimos CPF, endereço nem data de nascimento. O e-mail solicitado para gerar o Pix é repassado
-            diretamente ao Mercado Pago (que o exige) e <strong>não é armazenado</strong> pela Atlética. Para limitar
+            Não pedimos CPF, endereço nem data de nascimento. Os dados digitados no ambiente do Mercado Pago (como
+            e-mail, CPF ou cartão) são tratados por ele e <strong>não chegam à Atlética</strong>. Para limitar
             abusos, usamos temporariamente uma versão cifrada (hash) do endereço IP, descartada em até 24 horas.
           </p>
 

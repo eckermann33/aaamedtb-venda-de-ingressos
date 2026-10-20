@@ -22,13 +22,13 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | 3 | Cálculo correto dos preços | Integração: preço/taxa vindos do banco; alteração de preço vale para novas compras | ✅ |
 | 4 | Validação dos campos obrigatórios | Navegador (mensagens na tela) e integração (nome vazio, só espaços, sem sobrenome, com símbolos; celular ausente ou com letras) | ✅ |
 | 5 | Bloqueio de menores de 18 anos | Navegador (não avança sem marcar) e API (400 com `adultConfirmed: false`) | ✅ |
-| 6 | Pagamento por Pix | Navegador: QR Code, copia e cola, contagem regressiva; chave de idempotência `pix-<compra>` enviada | ✅ (simulador) |
+| 6 | Pagamento por Pix | Navegador: Pix escolhido → checkout do Mercado Pago só com Pix (cartão excluído, Pix permitido) → pendente → aprovado; chave de idempotência `pref-<compra>` enviada | ✅ (simulador) |
 | 7 | Pagamento por cartão | Navegador: redirecionamento ao checkout, parcela única, taxa como item separado, retorno aprovado | ✅ (simulador) |
 | 8 | Pagamento aprovado | Confirma, gera código interno, entra na lista oficial | ✅ |
 | 9 | Pagamento pendente | Permanece "aguardando", não conta como receita nem entra na lista | ✅ |
-| 10 | Pagamento recusado | Pix recusado → "recusado"; cartão recusado → permite tentar outro cartão | ✅ |
+| 10 | Pagamento recusado | Pix ou cartão recusado → compra segue pendente, nada entra na lista e o comprador pode tentar de novo até a reserva vencer | ✅ |
 | 11 | Webhook recebido mais de uma vez | 3 webhooks iguais → 1 confirmação, 1 ingresso, 1 registro de pagamento; 5 aplicações simultâneas → 1 confirmação | ✅ |
-| 12 | Usuário fecha o navegador | Navegador fechado após gerar o Pix → webhook confirma; também conciliação sem webhook | ✅ |
+| 12 | Usuário fecha o navegador | Navegador fechado depois de gerar o Pix no Mercado Pago → webhook confirma; também conciliação sem webhook | ✅ |
 | 13 | Falsificar o preço | Campos `amountCents`/`priceCents` enviados à API são ignorados; MP recebe o valor do banco; pagamento com valor diferente não confirma | ✅ |
 | 14 | Painel sem autenticação | Páginas redirecionam ao login; exportação retorna 401; senha errada retorna 401 | ✅ |
 | 15 | Pesquisa por nome | Busca "otavio" encontra "Otávio Mendes Luz" (sem acento/maiúsculas) | ✅ |
@@ -42,11 +42,12 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 
 - Assinatura do webhook: válida, ID adulterado, segredo errado, cabeçalho ausente/malformado; webhook forjado retorna 401 e fica registrado na auditoria.
 - CSRF: `POST /api/purchases` com `Origin` de outro site → 403.
-- Clique duplo: 4 envios com a mesma chave → 1 compra e 1 Pix.
+- Clique duplo: 4 envios com a mesma chave → 1 compra e 1 preferência no Mercado Pago.
 - Falha do Mercado Pago ao criar pagamento → compra "falhou", sem reserva presa, mensagem amigável.
 - Estorno pelo painel → "estornado", sai da lista; chargeback também.
 - Pagamento duplicado na mesma compra → alerta; estorno do excedente limpa o alerta.
-- E-mail do Pix não é gravado no banco.
+- Nenhum e-mail é pedido ou gravado: o Pix também roda no Checkout Pro.
+- Pix cancelado/vencido ou cartão recusado não encerram a compra: o comprador pode tentar de novo até a reserva vencer; depois vira "expirado".
 - Versão dos termos e data/hora do aceite registradas; aceite de versão antiga é recusado.
 - Senhas: hash scrypt com sal, verificação, regras mínimas.
 - Lista impressa conferida em PDF A4.

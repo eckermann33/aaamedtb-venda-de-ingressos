@@ -35,15 +35,14 @@ describe("preços e categorias", () => {
     expect(p.ticket_price_cents).toBe(2000);
     expect(p.fee_cents).toBe(300);
     expect(p.amount_cents).toBe(2300);
-    expect(mp.pixCalls[0].amountCents).toBe(2300);
+    expect(mp.prefCalls[0]).toMatchObject({ method: "pix", ticketPriceCents: 2000, feeCents: 300 });
     expect(p.status).toBe("pending");
   });
 
   it("2. ingresso masculino: R$ 30,00 + taxa de R$ 3,00", async () => {
     const p = await createPurchase(deps(mp), request(terms, { categoryId: "masculino", paymentMethod: "card" }));
     expect(p.amount_cents).toBe(3300);
-    expect(mp.prefCalls[0].ticketPriceCents).toBe(3000);
-    expect(mp.prefCalls[0].feeCents).toBe(300);
+    expect(mp.prefCalls[0]).toMatchObject({ method: "card", ticketPriceCents: 3000, feeCents: 300 });
     expect(p.checkout_url).toContain("https://mp.example/checkout/");
   });
 
@@ -66,7 +65,7 @@ describe("preços e categorias", () => {
     expect(tampered).not.toHaveProperty("amountCents");
     const p = await createPurchase(deps(mp), tampered);
     expect(p.amount_cents).toBe(2300);
-    expect(mp.pixCalls[0].amountCents).toBe(2300);
+    expect(mp.prefCalls[0]).toMatchObject({ ticketPriceCents: 2000, feeCents: 300 });
   });
 
   it("rejeita categoria inexistente ou inativa", async () => {
@@ -113,11 +112,14 @@ describe("validação do formulário (backend)", () => {
     expect(purchaseRequestSchema.safeParse({ ...request(terms), termsAccepted: false }).success).toBe(false);
   });
 
-  it("Pix exige e-mail (pedido pelo Mercado Pago), mas ele não é salvo no banco", async () => {
-    await expectError(createPurchase(deps(mp), request(terms, { payerEmail: undefined })), "email_required");
-    const p = await createPurchase(deps(mp), request(terms));
-    const [row] = await sql()`SELECT row_to_json(purchases)::text AS j FROM purchases WHERE id = ${p.id}`;
-    expect(row.j).not.toContain("maria@example.com");
+  it("Pix e cartão levam ao Checkout Pro; nenhum e-mail é pedido nem guardado", async () => {
+    const pix = await createPurchase(deps(mp), { ...request(terms), payerEmail: "maria@example.com" } as never);
+    const card = await createPurchase(deps(mp), request(terms, { paymentMethod: "card" }));
+    expect(mp.prefCalls.map((c) => c.method)).toEqual(["pix", "card"]);
+    expect(pix.checkout_url).toContain("https://mp.example/checkout/");
+    expect(card.checkout_url).toContain("https://mp.example/checkout/");
+    const rows = await sql()`SELECT row_to_json(purchases)::text AS j FROM purchases`;
+    expect(rows.map((r) => r.j).join()).not.toContain("maria@example.com");
   });
 
   it("registra versão e data/hora do aceite dos termos", async () => {
@@ -169,7 +171,7 @@ describe("controle de vendas", () => {
     expect(ids.size).toBe(1);
     const [{ n }] = await sql()<{ n: number }[]>`SELECT count(*)::int AS n FROM purchases`;
     expect(n).toBe(1);
-    expect(mp.pixCalls).toHaveLength(1);
+    expect(mp.prefCalls).toHaveLength(1);
   });
 
   it("falha no Mercado Pago: compra marcada como falha, sem reserva presa", async () => {
@@ -185,7 +187,10 @@ describe("controle de vendas", () => {
 describe("pagamentos e webhooks", () => {
   it("8. Pix aprovado confirma a compra e gera código interno", async () => {
     const p = await createPurchase(deps(mp), request(terms));
-    const result = await applyPayment(sql(), mp.set(p.mp_payment_id!, "approved"));
+    // O comprador gera o Pix (pendente) e depois paga.
+    const pix = mp.pay(p, "pending");
+    expect(await applyPayment(sql(), pix)).toBe("updated");
+    const result = await applyPayment(sql(), mp.set(pix.id, "approved"));
     expect(result).toBe("confirmed");
     const after = (await getPurchase(sql(), p.id))!;
     expect(after.status).toBe("confirmed");
@@ -197,7 +202,7 @@ describe("pagamentos e webhooks", () => {
 
   it("11. webhook repetido não duplica confirmação nem ingresso", async () => {
     const p = await createPurchase(deps(mp), request(terms));
-    const approved = mp.set(p.mp_payment_id!, "approved");
+    const approved = mp.pay(p, "approved");
     const results = await Promise.all([1, 2, 3, 4, 5].map(() => applyPayment(sql(), approved)));
     expect(results.filter((r) => r === "confirmed")).toHaveLength(1);
     expect(results.filter((r) => r === "already_confirmed")).toHaveLength(4);
@@ -212,42 +217,55 @@ describe("pagamentos e webhooks", () => {
 
   it("9. pagamento pendente não entra na lista nem na receita", async () => {
     const p = await createPurchase(deps(mp), request(terms));
-    await applyPayment(sql(), mp.set(p.mp_payment_id!, "in_process"));
-    expect((await getPurchase(sql(), p.id))!.status).toBe("pending");
+    await applyPayment(sql(), mp.pay(p, "pending"));
+    let after = (await getPurchase(sql(), p.id))!;
+    expect(after.status).toBe("pending");
+    expect(publicState(after)).toBe("awaiting_payment");
+    await applyPayment(sql(), mp.pay(p, "in_process"));
+    after = (await getPurchase(sql(), p.id))!;
+    expect(after.status).toBe("pending");
     expect(await officialList(sql())).toHaveLength(0);
     const stats = await getStats(sql());
     expect(stats.grossRevenueCents).toBe(0);
     expect(stats.pendingActive).toBe(1);
   });
 
-  it("10. pagamento recusado (Pix) marca a compra como recusada", async () => {
+  it("10. Pix recusado permite tentar de novo e nunca entra na lista", async () => {
     const p = await createPurchase(deps(mp), request(terms));
-    await applyPayment(sql(), mp.set(p.mp_payment_id!, "rejected"));
+    await applyPayment(sql(), mp.pay(p, "rejected"));
     const after = (await getPurchase(sql(), p.id))!;
-    expect(after.status).toBe("rejected");
-    expect(publicState(after)).toBe("rejected");
+    expect(after.status).toBe("pending");
+    expect(publicState(after)).toBe("payment_rejected");
+    expect(await officialList(sql())).toHaveLength(0);
   });
 
-  it("Pix expirado (cancelado pelo MP) aparece como expirado", async () => {
+  it("Pix expirado (cancelado pelo MP) deixa tentar de novo e, vencida a reserva, vira expirado", async () => {
     const p = await createPurchase(deps(mp), request(terms));
-    await applyPayment(sql(), mp.set(p.mp_payment_id!, "cancelled", { status_detail: "expired" }));
-    expect((await getPurchase(sql(), p.id))!.status).toBe("expired");
-  });
-
-  it("cartão recusado permite tentar de novo; aprovado depois confirma", async () => {
-    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card", payerEmail: undefined }));
-    await applyPayment(sql(), mp.cardPayment(p.id, 2300, "rejected"));
+    await applyPayment(sql(), mp.pay(p, "cancelled", { status_detail: "expired" }));
     let after = (await getPurchase(sql(), p.id))!;
     expect(after.status).toBe("pending");
     expect(publicState(after)).toBe("payment_rejected");
-    await applyPayment(sql(), mp.cardPayment(p.id, 2300, "approved"));
+    await sql()`UPDATE purchases SET expires_at = now() - interval '1 minute' WHERE id = ${p.id}`;
+    await reconcilePurchase(sql(), mp, p.id, { minIntervalSeconds: 0 });
+    after = (await getPurchase(sql(), p.id))!;
+    expect(after.status).toBe("expired");
+    expect(publicState(after)).toBe("expired");
+  });
+
+  it("cartão recusado permite tentar de novo; aprovado depois confirma", async () => {
+    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card" }));
+    await applyPayment(sql(), mp.pay(p, "rejected"));
+    let after = (await getPurchase(sql(), p.id))!;
+    expect(after.status).toBe("pending");
+    expect(publicState(after)).toBe("payment_rejected");
+    await applyPayment(sql(), mp.pay(p, "approved"));
     after = (await getPurchase(sql(), p.id))!;
     expect(after.status).toBe("confirmed");
   });
 
   it("valor divergente NÃO confirma e sinaliza para a organização", async () => {
-    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card", payerEmail: undefined }));
-    const result = await applyPayment(sql(), mp.cardPayment(p.id, 100, "approved"));
+    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card" }));
+    const result = await applyPayment(sql(), mp.pay(p, "approved", { transaction_amount: 1 }));
     expect(result).toBe("invalid_payment");
     const after = (await getPurchase(sql(), p.id))!;
     expect(after.status).toBe("pending");
@@ -262,9 +280,9 @@ describe("pagamentos e webhooks", () => {
   });
 
   it("segundo pagamento aprovado na mesma compra é sinalizado como duplicado", async () => {
-    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card", payerEmail: undefined }));
-    await applyPayment(sql(), mp.cardPayment(p.id, 2300, "approved"));
-    const dup = mp.cardPayment(p.id, 2300, "approved");
+    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card" }));
+    await applyPayment(sql(), mp.pay(p, "approved"));
+    const dup = mp.pay(p, "approved");
     expect(await applyPayment(sql(), dup)).toBe("duplicate_payment");
     expect((await getPurchase(sql(), p.id))!.attention).toBe("duplicate_payment");
     expect(await officialList(sql())).toHaveLength(1);
@@ -277,8 +295,9 @@ describe("pagamentos e webhooks", () => {
 
   it("estorno remove da lista oficial e é identificável", async () => {
     const p = await createPurchase(deps(mp), request(terms));
-    await applyPayment(sql(), mp.set(p.mp_payment_id!, "approved"));
-    await refundPurchasePayment(sql(), mp, p.id, p.mp_payment_id!);
+    const pay = mp.pay(p, "approved");
+    await applyPayment(sql(), pay);
+    await refundPurchasePayment(sql(), mp, p.id, String(pay.id));
     const after = (await getPurchase(sql(), p.id))!;
     expect(after.status).toBe("refunded");
     expect(after.refunded_at).toBeInstanceOf(Date);
@@ -290,8 +309,9 @@ describe("pagamentos e webhooks", () => {
 
   it("chargeback também remove da lista", async () => {
     const p = await createPurchase(deps(mp), request(terms));
-    await applyPayment(sql(), mp.set(p.mp_payment_id!, "approved"));
-    await applyPayment(sql(), mp.set(p.mp_payment_id!, "charged_back"));
+    const pay = mp.pay(p, "approved");
+    await applyPayment(sql(), pay);
+    await applyPayment(sql(), mp.set(pay.id, "charged_back"));
     expect((await getPurchase(sql(), p.id))!.status).toBe("refunded");
   });
 
@@ -300,9 +320,9 @@ describe("pagamentos e webhooks", () => {
     const a = await createPurchase(deps(mp), request(terms, { fullName: "Pessoa Um Teste" }));
     await sql()`UPDATE purchases SET expires_at = now() - interval '1 minute' WHERE id = ${a.id}`;
     const b = await createPurchase(deps(mp), request(terms, { fullName: "Pessoa Dois Teste" }));
-    await applyPayment(sql(), mp.set(b.mp_payment_id!, "approved"));
+    await applyPayment(sql(), mp.pay(b, "approved"));
     // O pagamento de A chega depois que a vaga foi para B.
-    expect(await applyPayment(sql(), mp.set(a.mp_payment_id!, "approved"))).toBe("over_capacity");
+    expect(await applyPayment(sql(), mp.pay(a, "approved"))).toBe("over_capacity");
     const after = (await getPurchase(sql(), a.id))!;
     expect(after.status).not.toBe("confirmed");
     expect(after.attention).toBe("over_capacity");
@@ -312,17 +332,17 @@ describe("pagamentos e webhooks", () => {
 });
 
 describe("12. comprador fecha o navegador / webhook não chega", () => {
-  it("conciliação confirma Pix consultando o Mercado Pago", async () => {
+  it("conciliação confirma Pix pago consultando o Mercado Pago", async () => {
     const p = await createPurchase(deps(mp), request(terms));
-    mp.set(p.mp_payment_id!, "approved"); // pago, mas nenhum webhook processado
+    mp.pay(p, "approved"); // pago, mas nenhum webhook processado
     await reconcilePurchase(sql(), mp, p.id, { minIntervalSeconds: 0 });
     expect((await getPurchase(sql(), p.id))!.status).toBe("confirmed");
   });
 
   it("conciliação de cartão busca pagamentos pela referência externa", async () => {
-    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card", payerEmail: undefined }));
-    mp.cardPayment(p.id, 2300, "rejected");
-    mp.cardPayment(p.id, 2300, "approved");
+    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card" }));
+    mp.pay(p, "rejected");
+    mp.pay(p, "approved");
     await reconcilePurchase(sql(), mp, p.id, { minIntervalSeconds: 0 });
     expect((await getPurchase(sql(), p.id))!.status).toBe("confirmed");
   });
@@ -335,9 +355,9 @@ describe("12. comprador fecha o navegador / webhook não chega", () => {
   });
 
   it("dica de payment_id na URL de retorno só vale se pertencer à compra", async () => {
-    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card", payerEmail: undefined }));
-    const other = await createPurchase(deps(mp), request(terms, { paymentMethod: "card", payerEmail: undefined }));
-    const otherPayment = mp.cardPayment(other.id, 2300, "approved");
+    const p = await createPurchase(deps(mp), request(terms, { paymentMethod: "card" }));
+    const other = await createPurchase(deps(mp), request(terms, { paymentMethod: "card" }));
+    const otherPayment = mp.pay(other, "approved");
     // Remove da busca para forçar o uso da dica.
     mp.searchPaymentsByReference = async () => [];
     await reconcilePurchase(sql(), mp, p.id, { minIntervalSeconds: 0, hintPaymentId: String(otherPayment.id) });
@@ -350,7 +370,7 @@ describe("transferência de ingresso", () => {
   it("troca o nome na lista mantendo o código interno", async () => {
     const { transferPurchase } = await import("@/server/purchases");
     const p = await createPurchase(deps(mp), request(terms));
-    await applyPayment(sql(), mp.set(p.mp_payment_id!, "approved"));
+    await applyPayment(sql(), mp.pay(p, "approved"));
     const before = (await getPurchase(sql(), p.id))!;
     const after = await transferPurchase(sql(), p.id, "  Joana   Prado Lima ");
     expect(after.full_name).toBe("Joana Prado Lima");
@@ -362,7 +382,7 @@ describe("transferência de ingresso", () => {
     const { transferPurchase } = await import("@/server/purchases");
     const p = await createPurchase(deps(mp), request(terms));
     await expectError(transferPurchase(sql(), p.id, "Outra Pessoa Silva"), "not_transferable");
-    await applyPayment(sql(), mp.set(p.mp_payment_id!, "approved"));
+    await applyPayment(sql(), mp.pay(p, "approved"));
     await expectError(transferPurchase(sql(), p.id, "   "), "invalid_name");
   });
 });

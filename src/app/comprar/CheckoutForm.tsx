@@ -20,8 +20,6 @@ type Props = {
   eventName: string;
 };
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
 function remember(id: string) {
   // Conveniência: lembra os pedidos feitos neste aparelho (não é registro oficial).
   try {
@@ -43,7 +41,6 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
   const [adult, setAdult] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [method, setMethod] = useState<"pix" | "card">("pix");
-  const [email, setEmail] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -78,11 +75,6 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
   async function pay(ev: React.FormEvent) {
     ev.preventDefault();
     if (submitting) return;
-    if (method === "pix" && !EMAIL.test(email.trim())) {
-      setErrors({ email: "Informe um e-mail válido." });
-      document.getElementById("f-email")?.focus();
-      return;
-    }
     setErrors({});
     setServerError(null);
     setSubmitting(true);
@@ -99,7 +91,6 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           termsVersionId,
           paymentMethod: method,
           buyerPhone: phone,
-          payerEmail: method === "pix" ? email.trim() : undefined,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -114,7 +105,8 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
       }
       const purchase = data.purchase as { id: string; checkoutUrl: string | null; state: string };
       remember(purchase.id);
-      if (method === "card" && purchase.checkoutUrl) {
+      // Pix e cartão são pagos no ambiente do Mercado Pago (Checkout Pro).
+      if (purchase.checkoutUrl) {
         window.location.assign(purchase.checkoutUrl);
         return;
       }
@@ -332,7 +324,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
                   <span className="choice-title">
                     <IconPix size={20} /> Pix
                   </span>
-                  <span className="choice-sub">Aprovação na hora, QR Code aqui no site</span>
+                  <span className="choice-sub">Aprovação na hora, QR Code no Mercado Pago</span>
                 </span>
                 <span className="choice-check" aria-hidden>
                   <IconCheck size={14} />
@@ -359,39 +351,15 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
             </div>
           </fieldset>
 
-          {method === "pix" ? (
-            <div className="field">
-              <label htmlFor="f-email">E-mail para o Pix</label>
-              <input
-                id="f-email"
-                className="input"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                placeholder="voce@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                aria-invalid={errors.email ? true : undefined}
-                aria-describedby="h-email"
-              />
-              <span className="hint" id="h-email">
-                Exigido pelo Mercado Pago para gerar o Pix. É enviado só para eles — a Atlética não guarda seu e-mail.
-              </span>
-              {errors.email && (
-                <span className="field-error" role="alert">
-                  {errors.email}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="notice" style={{ marginBottom: 18 }}>
-              <IconExternal size={20} />
-              <span>
-                Você será levado ao <strong>ambiente seguro do Mercado Pago</strong> para digitar os dados do cartão. Nós
-                não vemos nem guardamos os dados do seu cartão. Depois do pagamento, você volta para cá automaticamente.
-              </span>
-            </div>
-          )}
+          <div className="notice" style={{ marginBottom: 18 }}>
+            <IconExternal size={20} />
+            <span>
+              {method === "pix"
+                ? "Você será levado ao ambiente seguro do Mercado Pago, onde aparece o QR Code do Pix e o código copia e cola."
+                : "Você será levado ao ambiente seguro do Mercado Pago para digitar os dados do cartão. Nós não vemos nem guardamos os dados do seu cartão."}{" "}
+              Depois do pagamento, você volta para cá e seu nome entra na lista.
+            </span>
+          </div>
 
           {serverError && (
             <div className="notice notice-danger" role="alert" style={{ marginBottom: 16 }}>
@@ -406,7 +374,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
                 <span className="spinner" aria-hidden /> Processando…
               </>
             ) : method === "pix" ? (
-              <>Gerar Pix de {formatBRL(total)}</>
+              <>Pagar {formatBRL(total)} com Pix</>
             ) : (
               <>Pagar {formatBRL(total)} com cartão</>
             )}
