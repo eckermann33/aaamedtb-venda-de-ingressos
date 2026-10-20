@@ -16,7 +16,7 @@ jobs:
           POSTGRES_DB: invictus_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U invictus" --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U invictus -d invictus_test" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgres://invictus:devpass@localhost:5432/invictus_test
       E2E_DATABASE_URL: postgres://invictus:devpass@localhost:5432/invictus_e2e
