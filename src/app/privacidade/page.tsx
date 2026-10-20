@@ -41,6 +41,7 @@ export default async function PrivacyPage() {
           <h2>Quais dados coletamos</h2>
           <ul>
             <li>Nome completo — para montar a lista oficial de entrada.</li>
+            <li>Celular/WhatsApp — somente para avisos sobre o evento (por exemplo, cancelamento) e transferências.</li>
             <li>Categoria do ingresso, valores pagos e datas da compra.</li>
             <li>Confirmação de maioridade e registro do aceite das regras (versão, data e hora).</li>
             <li>

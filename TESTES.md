@@ -7,7 +7,7 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Camada | Ferramenta | Resultado |
 | --- | --- | --- |
 | Tipos (TypeScript) | `npm run typecheck` | ✅ sem erros |
-| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 47/47 |
+| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 49/49 |
 | Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 16/16 |
 | Build de produção | `npm run build` | ✅ |
 
@@ -20,7 +20,7 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | 1 | Compra de ingresso feminino | Integração (preço 20,00 + taxa 3,00 = 23,00) e navegador (Pix completo) | ✅ (simulador) |
 | 2 | Compra de ingresso masculino | Integração (30,00 + 3,00 = 33,00) e navegador (cartão completo) | ✅ (simulador) |
 | 3 | Cálculo correto dos preços | Integração: preço/taxa vindos do banco; alteração de preço vale para novas compras | ✅ |
-| 4 | Validação dos campos obrigatórios | Navegador (mensagens na tela) e integração (nome vazio, só espaços, sem sobrenome, com símbolos) | ✅ |
+| 4 | Validação dos campos obrigatórios | Navegador (mensagens na tela) e integração (nome vazio, só espaços, sem sobrenome, com símbolos; celular ausente ou com letras) | ✅ |
 | 5 | Bloqueio de menores de 18 anos | Navegador (não avança sem marcar) e API (400 com `adultConfirmed: false`) | ✅ |
 | 6 | Pagamento por Pix | Navegador: QR Code, copia e cola, contagem regressiva; chave de idempotência `pix-<compra>` enviada | ✅ (simulador) |
 | 7 | Pagamento por cartão | Navegador: redirecionamento ao checkout, parcela única, taxa como item separado, retorno aprovado | ✅ (simulador) |
@@ -56,7 +56,8 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 ## Limitações conhecidas / o que falta
 
 1. **Teste com o Mercado Pago real (sandbox e produção) não realizado** — sem acesso de rede ao Mercado Pago neste ambiente. Os campos da API foram conferidos no SDK oficial `mercadopago` v3.6.1, mas é obrigatório fazer o roteiro do README (seção 7).
-2. **Dados do evento pendentes**: telefone de contato válido (o informado tem uma letra) e política em caso de cancelamento do evento (as vendas ficam bloqueadas até preencher).
-3. A política de privacidade é um modelo — revise com a diretoria.
-4. Testes em iPhone/Safari reais não foram feitos (apenas Chromium com perfil de celular).
-5. Os valores de custo (Mercado Pago, Railway) no README são referências e devem ser confirmados nos sites oficiais.
+2. **Única pendência para vender**: credenciais do Mercado Pago (`MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET`). Os dados do evento estão completos.
+3. Migração `002_buyer_phone.sql` testada aplicando por cima de um banco já existente.
+4. A política de privacidade é um modelo — revise com a diretoria.
+5. Testes em iPhone/Safari reais não foram feitos (apenas Chromium com perfil de celular).
+6. Os valores de custo (Mercado Pago, Railway) no README são referências e devem ser confirmados nos sites oficiais.

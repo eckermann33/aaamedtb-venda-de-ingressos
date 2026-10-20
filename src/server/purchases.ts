@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { PAYMENT_WINDOW_MINUTES } from "@/config/event";
+import { phoneDigits } from "@/lib/contact";
 import { cleanName, searchableName, validateFullName, type PurchaseRequest } from "@/lib/validation";
 import type { Sql, TxSql } from "./db";
 import { errorInfo, logger } from "./logger";
@@ -12,6 +13,7 @@ export type PurchaseRow = {
   id: string;
   client_request_id: string;
   full_name: string;
+  buyer_phone: string | null;
   category_id: string;
   category_label: string;
   ticket_price_cents: number;
@@ -92,6 +94,10 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
   const { sql, mp } = deps;
   const nameError = validateFullName(input.fullName);
   if (nameError) throw new PurchaseError("invalid_name", nameError, 400);
+  const buyerPhone = phoneDigits(input.buyerPhone);
+  if (!buyerPhone) {
+    throw new PurchaseError("invalid_phone", "Informe um celular/WhatsApp com DDD, só com números.", 400);
+  }
   if (input.paymentMethod === "pix" && !input.payerEmail) {
     throw new PurchaseError("email_required", "Informe um e-mail para gerar o Pix.", 400);
   }
@@ -132,10 +138,10 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
 
     const rows = await tx<PurchaseRow[]>`
       INSERT INTO purchases (
-        client_request_id, full_name, name_search, category_id, category_label,
+        client_request_id, full_name, name_search, buyer_phone, category_id, category_label,
         ticket_price_cents, fee_cents, amount_cents, payment_method, adult_confirmed, terms_version_id, terms_accepted_at, expires_at
       ) VALUES (
-        ${input.clientRequestId}, ${fullName}, ${searchableName(fullName)}, ${category.id}, ${category.label},
+        ${input.clientRequestId}, ${fullName}, ${searchableName(fullName)}, ${buyerPhone}, ${category.id}, ${category.label},
         ${category.priceCents}, ${settings.serviceFeeCents}, ${category.priceCents + settings.serviceFeeCents},
         ${input.paymentMethod}, true, ${settings.termsVersionId}, now(),
         now() + ${reservationMs / 1000} * interval '1 second'
@@ -598,7 +604,7 @@ export const ANONYMIZED_NAME = "Titular removido";
 /** Remove o nome de uma compra (pedido do titular ou fim do prazo de retenção). */
 export async function anonymizePurchase(sql: Sql | TxSql, id: string): Promise<boolean> {
   const rows = await sql`
-    UPDATE purchases SET full_name = ${ANONYMIZED_NAME}, name_search = '', pix_qr_code = NULL,
+    UPDATE purchases SET full_name = ${ANONYMIZED_NAME}, name_search = '', buyer_phone = NULL, pix_qr_code = NULL,
       pix_qr_code_base64 = NULL, pix_ticket_url = NULL, anonymized_at = now(), updated_at = now()
     WHERE id = ${id} AND anonymized_at IS NULL
     RETURNING id
@@ -612,7 +618,7 @@ export async function anonymizePurchase(sql: Sql | TxSql, id: string): Promise<b
  */
 export async function anonymizeAll(sql: Sql): Promise<number> {
   const rows = await sql`
-    UPDATE purchases SET full_name = ${ANONYMIZED_NAME}, name_search = '', pix_qr_code = NULL,
+    UPDATE purchases SET full_name = ${ANONYMIZED_NAME}, name_search = '', buyer_phone = NULL, pix_qr_code = NULL,
       pix_qr_code_base64 = NULL, pix_ticket_url = NULL, anonymized_at = now(), updated_at = now()
     WHERE anonymized_at IS NULL AND NOT (status = 'pending' AND expires_at > now())
     RETURNING id

@@ -43,6 +43,7 @@ export async function mockState() {
 export async function fillStep1(page: Page, name: string, category: "Feminino" | "Masculino") {
   await page.goto("/comprar");
   await page.getByLabel("Nome completo").fill(name);
+  await page.getByLabel("Celular / WhatsApp").fill("(42) 99999-8888");
   await page.locator("label.choice", { hasText: category }).click();
   await page.getByText("Confirmo que tenho 18 anos ou mais").click();
   await page.getByText("Li e aceito as regras de entrada").click();

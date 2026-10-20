@@ -36,15 +36,15 @@ Esses dados **não foram fornecidos** e por isso **não foram inventados**. Enqu
 
 | Informação | Obrigatória para vender? |
 | --- | --- |
-| **Telefone/WhatsApp de contato** — o número informado ("429l1374203") tem uma letra; confirmar o número correto (ou informar um e-mail) | ✅ Sim (exigido pela LGPD e usado nas transferências) |
-| **Política em caso de cancelamento/adiamento do evento** (ex.: devolução do valor) | ✅ Sim |
-| Credenciais do Mercado Pago (`MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`) | ✅ Sim |
+| Credenciais do Mercado Pago (`MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`) | ✅ Sim — é a única pendência obrigatória |
 | Endereço do local | ⚠️ Não — só o nome "Santo Gole" aparece |
 | Limite de ingressos (lotação) | ⚠️ Não — vazio = sem limite (o painel avisa) |
 | Horário de término, e-mail, Instagram | Opcionais |
 | Preço do camarote | Não é vendido online nesta versão |
 
-Já configurado com o que foi informado: nome **Party do Saco Cheio**, **24/10/2026 a partir das 23:30**, local **Santo Gole**, frase do cartaz, parceria **Santo Gole**, preços **Feminino R$ 20,00** e **Masculino R$ 30,00**, **taxa de R$ 3,00 por ingresso**, regras de entrada, texto do camarote, **compra sem cancelamento/reembolso** e **transferência por mensagem ao contato da organização**.
+Já configurado com o que foi informado: nome **Party do Saco Cheio**, **24/10/2026 a partir das 23:30**, local **Santo Gole**, contato **(42) 99137-4203** (WhatsApp), frase do cartaz, parceria **Santo Gole**, preços **Feminino R$ 20,00** e **Masculino R$ 30,00**, **taxa de R$ 3,00 por ingresso**, regras de entrada, texto do camarote, **compra sem cancelamento/reembolso**, **transferência por mensagem ao contato da organização** e, **se a festa for cancelada, a organização entra em contato** com quem comprou.
+
+**Telefone do comprador:** o formulário pede **celular/WhatsApp** (obrigatório) para que a organização consiga avisar em caso de cancelamento. Ele aparece no detalhe de cada compra (com link do WhatsApp) e no CSV "todas as compras" — **não** aparece na lista impressa. É apagado junto com o nome na anonimização.
 
 > A política "não dá para cancelar" foi escrita com a ressalva "ressalvados os direitos previstos no Código de Defesa do Consumidor": o CDC (art. 49) garante arrependimento em até 7 dias em compras pela internet, e uma regra que tente anular isso não vale. Ajuste o texto no painel se quiser.
 
@@ -309,7 +309,7 @@ A **taxa de serviço de R$ 3,00** entra no faturamento da Atlética (aparece sep
 - Limite de requisições na compra, no status e no login (armazenado no banco, com IP em hash).
 - Auditoria de login, alterações de configuração, abertura/fechamento de vendas, exportações, estornos e anonimizações.
 - Erros técnicos ficam só nos logs do servidor (sem tokens, e-mails, códigos Pix ou dados de cartão).
-- **Coleta mínima**: nome completo, categoria, aceite (versão + data/hora) e dados do pagamento. Sem CPF, endereço ou data de nascimento. E-mail do Pix não é armazenado.
+- **Coleta mínima**: nome completo, celular/WhatsApp (avisos sobre o evento), categoria, aceite (versão + data/hora) e dados do pagamento. Sem CPF, endereço ou data de nascimento. E-mail do Pix não é armazenado.
 - Nomes nunca aparecem em páginas públicas; a URL do pedido usa um identificador aleatório.
 - **Retenção**: política padrão de anonimizar nomes em até 90 dias após o evento (configurável). Botão em `/admin/configuracoes` para anonimizar tudo e, em cada compra, para atender pedidos de exclusão do titular. Valores e IDs de pagamento ficam para prestação de contas.
 - Política de privacidade em `/privacidade` — **revise com a diretoria** (é um modelo).

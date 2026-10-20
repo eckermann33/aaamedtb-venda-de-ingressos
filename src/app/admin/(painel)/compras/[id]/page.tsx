@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ATTENTION_LABEL, MP_STATUS_LABEL, StatusBadge } from "@/components/admin";
+import { formatPhone } from "@/lib/contact";
 import { formatDateTime } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
 import { getSql } from "@/server/db";
@@ -34,6 +35,18 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
         <div className="panel" style={{ marginTop: 0 }}>
           <h2>Compra</h2>
           <dl className="summary">
+            <div>
+              <dt>Celular / WhatsApp</dt>
+              <dd>
+                {p.buyer_phone ? (
+                  <a href={`https://wa.me/55${p.buyer_phone}`} target="_blank" rel="noopener noreferrer">
+                    {formatPhone(p.buyer_phone)}
+                  </a>
+                ) : (
+                  "—"
+                )}
+              </dd>
+            </div>
             <div><dt>Categoria</dt><dd>{p.category_label}</dd></div>
             <div><dt>Ingresso</dt><dd>{formatBRL(p.ticket_price_cents)}</dd></div>
             <div><dt>Taxa de serviço</dt><dd>{formatBRL(p.fee_cents)}</dd></div>

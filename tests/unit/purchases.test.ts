@@ -86,6 +86,22 @@ describe("validação do formulário (backend)", () => {
     expect(n).toBe(0);
   });
 
+  it("exige celular/WhatsApp válido e guarda só os dígitos", async () => {
+    await expectError(createPurchase(deps(mp), request(terms, { buyerPhone: "" })), "invalid_phone");
+    await expectError(createPurchase(deps(mp), request(terms, { buyerPhone: "429l1374203" })), "invalid_phone");
+    const p = await createPurchase(deps(mp), request(terms, { buyerPhone: "(42) 99137-4203" }));
+    expect(p.buyer_phone).toBe("42991374203");
+  });
+
+  it("anonimização apaga nome e telefone", async () => {
+    const { anonymizePurchase } = await import("@/server/purchases");
+    const p = await createPurchase(deps(mp), request(terms));
+    await anonymizePurchase(sql(), p.id);
+    const after = (await getPurchase(sql(), p.id))!;
+    expect(after.buyer_phone).toBeNull();
+    expect(after.full_name).toBe("Titular removido");
+  });
+
   it("normaliza espaços extras no nome", async () => {
     const p = await createPurchase(deps(mp), request(terms, { fullName: "  João   da  Silva  " }));
     expect(p.full_name).toBe("João da Silva");

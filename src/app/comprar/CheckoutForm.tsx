@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import type { TermsContent } from "@/config/event";
 import { IconAlert, IconCard, IconCheck, IconExternal, IconLock, IconPix } from "@/components/icons";
+import { formatPhone, phoneDigits } from "@/lib/contact";
 import { formatBRL } from "@/lib/money";
 import { AGE_TEXT, cleanName, validateFullName } from "@/lib/validation";
 
@@ -35,6 +36,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [categoryId, setCategoryId] = useState(
     categories.some((c) => c.id === preselected) ? preselected! : categories.length === 1 ? categories[0].id : "",
   );
@@ -56,6 +58,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
     const next: Record<string, string> = {};
     const nameError = validateFullName(name);
     if (nameError) next.name = nameError;
+    if (!phoneDigits(phone)) next.phone = "Informe um celular/WhatsApp com DDD, só com números.";
     if (!category) next.category = "Escolha a categoria do ingresso.";
     if (!adult) next.adult = "É obrigatório confirmar que você tem 18 anos ou mais.";
     if (!accepted) next.accepted = "É preciso aceitar as regras e os termos para continuar.";
@@ -95,6 +98,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           termsAccepted: accepted,
           termsVersionId,
           paymentMethod: method,
+          buyerPhone: phone,
           payerEmail: method === "pix" ? email.trim() : undefined,
         }),
       });
@@ -154,6 +158,32 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
             {errors.name && (
               <span className="field-error" id="e-name" role="alert">
                 {errors.name}
+              </span>
+            )}
+          </div>
+
+          <div className="field">
+            <label htmlFor="f-phone">Celular / WhatsApp</label>
+            <input
+              id="f-phone"
+              className="input"
+              name="phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel-national"
+              placeholder="(42) 99999-9999"
+              value={phone}
+              maxLength={20}
+              onChange={(e) => setPhone(e.target.value)}
+              aria-invalid={errors.phone ? true : undefined}
+              aria-describedby="h-phone e-phone"
+            />
+            <span className="hint" id="h-phone">
+              Usado só para avisos sobre a festa (por exemplo, se ela for cancelada).
+            </span>
+            {errors.phone && (
+              <span className="field-error" id="e-phone" role="alert">
+                {errors.phone}
               </span>
             )}
           </div>
@@ -260,6 +290,10 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
             <div>
               <dt>Nome na lista</dt>
               <dd>{name}</dd>
+            </div>
+            <div>
+              <dt>Celular / WhatsApp</dt>
+              <dd>{phoneDigits(phone) ? formatPhone(phoneDigits(phone)!) : phone}</dd>
             </div>
             <div>
               <dt>Categoria</dt>

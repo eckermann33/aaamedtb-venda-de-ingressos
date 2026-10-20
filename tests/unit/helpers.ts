@@ -112,6 +112,7 @@ export function request(termsVersionId: number, over: Partial<PurchaseRequest> =
     termsAccepted: true,
     termsVersionId,
     paymentMethod: "pix",
+    buyerPhone: "(42) 99999-8888",
     payerEmail: "maria@example.com",
     ...over,
   };

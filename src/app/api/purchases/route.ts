@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     if (fields.includes("adultConfirmed")) message = "É preciso confirmar que você tem 18 anos ou mais.";
     else if (fields.includes("termsAccepted")) message = "É preciso aceitar as regras de entrada e os termos.";
     else if (fields.includes("payerEmail")) message = "Informe um e-mail válido para gerar o Pix.";
+    else if (fields.includes("buyerPhone")) message = "Informe um celular/WhatsApp com DDD.";
     return errorResponse(message, 400, "validation");
   }
 

@@ -1,3 +1,4 @@
+import { formatPhone } from "@/lib/contact";
 import { toCsv } from "@/lib/csv";
 import { formatDateTime } from "@/lib/dates";
 import { audit } from "@/server/audit";
@@ -36,10 +37,10 @@ export async function GET(request: Request) {
   } else {
     const all = await allPurchases(sql);
     csv = toCsv(
-      ["Nome completo", "Categoria", "Valor total (R$)", "Taxa (R$)", "Forma", "Status da compra", "Status MP",
+      ["Nome completo", "Celular/WhatsApp", "Categoria", "Valor total (R$)", "Taxa (R$)", "Forma", "Status da compra", "Status MP",
        "ID pagamento MP", "Código interno", "Criada em", "Confirmada em", "Alerta"],
       all.map((r) => [
-        r.full_name, r.category_label, money(r.amount_cents), money(r.fee_cents),
+        r.full_name, r.buyer_phone ? formatPhone(r.buyer_phone) : "", r.category_label, money(r.amount_cents), money(r.fee_cents),
         r.payment_method === "pix" ? "Pix" : "Cartão", STATUS_LABEL[r.status] ?? r.status, r.payment_status,
         r.mp_payment_id, r.ticket_code, formatDateTime(r.created_at), formatDateTime(r.confirmed_at), r.attention,
       ]),

@@ -60,8 +60,7 @@ export const DEFAULT_EVENT: EventInfo = {
   camarote:
     "O camarote será vendido separadamente na entrada da festa, conforme disponibilidade. A compra do ingresso comum não garante acesso ao camarote.",
   contactEmail: null, // opcional
-  // PENDENTE — o número informado ("429l1374203") tem um caractere inválido; confirmar antes de publicar.
-  contactPhone: null,
+  contactPhone: "42991374203",
   contactInstagram: null, // PENDENTE (opcional)
   statementDescriptor: "INVICTUS",
   retentionDays: 90,
@@ -79,7 +78,8 @@ export const DEFAULT_TERMS: TermsContent = {
   ],
   refundPolicy:
     "Depois que o pagamento é aprovado, a compra não pode ser cancelada pelo comprador e o valor não é reembolsado, ressalvados os direitos previstos no Código de Defesa do Consumidor.",
-  cancellationPolicy: null, // PENDENTE — o que acontece se o EVENTO for cancelado/adiado
+  cancellationPolicy:
+    "Se a festa for cancelada, a organização entrará em contato com quem comprou pelo telefone/WhatsApp informado na compra.",
   transferPolicy:
     "O ingresso pode ser transferido para outra pessoa maior de 18 anos. Para isso, envie uma mensagem para o telefone/WhatsApp de contato da organização informando o nome completo de quem comprou e o nome completo da nova pessoa. A organização atualiza o nome na lista oficial de entrada.",
 };

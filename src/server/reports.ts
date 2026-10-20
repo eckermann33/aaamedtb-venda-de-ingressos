@@ -112,6 +112,7 @@ export type ListFilters = {
 export type ListRow = {
   id: string;
   full_name: string;
+  buyer_phone: string | null;
   category_label: string;
   amount_cents: number;
   fee_cents: number;
@@ -156,7 +157,7 @@ export async function listPurchases(sql: Sql, f: ListFilters): Promise<{ rows: L
 
   const [{ total }] = await sql<{ total: number }[]>`SELECT count(*)::int AS total FROM purchases ${where}`;
   const rows = await sql<ListRow[]>`
-    SELECT id, full_name, category_label, amount_cents, fee_cents, payment_method, status, payment_status,
+    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, status, payment_status,
            attention, mp_payment_id, ticket_code, created_at, confirmed_at
     FROM purchases ${where}
     ORDER BY ${order}
@@ -186,7 +187,7 @@ export async function officialList(sql: Sql): Promise<OfficialRow[]> {
 /** Todas as compras (relatório financeiro), da mais antiga para a mais recente. */
 export async function allPurchases(sql: Sql): Promise<ListRow[]> {
   return sql<ListRow[]>`
-    SELECT id, full_name, category_label, amount_cents, fee_cents, payment_method, status, payment_status,
+    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, status, payment_status,
            attention, mp_payment_id, ticket_code, created_at, confirmed_at
     FROM purchases
     ORDER BY created_at ASC

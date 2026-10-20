@@ -23,6 +23,7 @@ test("4/5. formulário bloqueia campos vazios, nome só com espaços e falta de 
   await page.goto("/comprar");
   await page.getByRole("button", { name: /Continuar/ }).click();
   await expect(page.getByText("Informe seu nome completo.")).toBeVisible();
+  await expect(page.getByText("Informe um celular/WhatsApp com DDD, só com números.")).toBeVisible();
   await expect(page.getByText("Escolha a categoria do ingresso.")).toBeVisible();
   await expect(page.getByText("É obrigatório confirmar que você tem 18 anos ou mais.")).toBeVisible();
   await page.getByLabel("Nome completo").fill("     ");
@@ -37,6 +38,7 @@ test("4/5. formulário bloqueia campos vazios, nome só com espaços e falta de 
 test("1/6/8/11. compra feminina por Pix: QR Code, webhook repetido e confirmação na tela", async ({ page }) => {
   await fillStep1(page, "Ana Beatriz Moreira", "Feminino");
   await expect(page.locator(".summary")).toContainText("R$ 20,00");
+  await expect(page.locator(".summary")).toContainText("(42) 99999-8888");
   await expect(page.locator(".summary")).toContainText("Taxa de serviço");
   await expect(page.locator(".summary .total")).toContainText("R$ 23,00");
   await page.getByLabel("E-mail para o Pix").fill("ana@example.com");
@@ -129,6 +131,7 @@ test("13. API ignora preço adulterado e bloqueia requisições de outra origem 
     termsAccepted: true,
     termsVersionId: settings.t,
     paymentMethod: "pix",
+    buyerPhone: "42999998888",
     payerEmail: "h@example.com",
     amountCents: 1,
     priceCents: 1,
@@ -176,6 +179,7 @@ test("valor divergente no pagamento não confirma a compra", async ({ request, b
       termsAccepted: true,
       termsVersionId: settings.t,
       paymentMethod: "pix",
+      buyerPhone: "42999998888",
       payerEmail: "b@example.com",
     },
   });
@@ -203,6 +207,7 @@ test("18. vendas fechadas: página e API recusam compras", async ({ page, reques
       termsAccepted: true,
       termsVersionId: settings.t,
       paymentMethod: "card",
+      buyerPhone: "42999998888",
     },
   });
   expect(res.status()).toBe(409);
