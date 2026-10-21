@@ -89,6 +89,13 @@ export const DEFAULT_CATEGORIES = [
   { id: "masculino", label: "Masculino", priceCents: 3000, sortOrder: 2 },
 ];
 
+/**
+ * Limite de ingressos vendidos online (confirmados + reservas em pagamento).
+ * Informado pela organização: a festa não passa de 500 pessoas. Se houver venda na
+ * porta (ex.: camarote) ou convidados, reduza este número no painel.
+ */
+export const DEFAULT_CAPACITY = 500;
+
 /** Taxa de serviço por ingresso (em centavos). Alterável no painel. */
 export const DEFAULT_SERVICE_FEE_CENTS = 300;
 

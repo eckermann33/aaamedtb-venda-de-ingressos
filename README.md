@@ -38,11 +38,11 @@ Esses dados **não foram fornecidos** e por isso **não foram inventados**. Enqu
 | --- | --- |
 | Credenciais do Mercado Pago (`MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`) | ✅ Sim — é a única pendência obrigatória |
 | Endereço do local | ⚠️ Não — só o nome "Santo Gole" aparece |
-| Limite de ingressos (lotação) | ⚠️ Não — vazio = sem limite (o painel avisa) |
+| Limite de ingressos (lotação) | ✅ Já definido em **500** (a festa não passa disso). Se houver venda na porta/convidados, reduza no painel |
 | Horário de término, e-mail, Instagram | Opcionais |
 | Preço do camarote | Não é vendido online nesta versão |
 
-Já configurado com o que foi informado: nome **Party do Saco Cheio**, **24/10/2026 a partir das 23:30**, local **Santo Gole**, contato **(42) 99137-4203** (WhatsApp), frase do cartaz, parceria **Santo Gole**, preços **Feminino R$ 20,00** e **Masculino R$ 30,00**, **taxa de R$ 3,00 por ingresso**, regras de entrada, texto do camarote, **compra sem cancelamento/reembolso**, **transferência por mensagem ao contato da organização** e, **se a festa for cancelada, a organização entra em contato** com quem comprou.
+Já configurado com o que foi informado: nome **Party do Saco Cheio**, **24/10/2026 a partir das 23:30**, local **Santo Gole**, contato **(42) 99137-4203** (WhatsApp), frase do cartaz, parceria **Santo Gole**, preços **Feminino R$ 20,00** e **Masculino R$ 30,00**, **taxa de R$ 3,00 por ingresso**, **lotação de 500**, regras de entrada, texto do camarote, **compra sem cancelamento/reembolso**, **transferência por mensagem ao contato da organização** e, **se a festa for cancelada, a organização entra em contato** com quem comprou.
 
 **Telefone do comprador:** o formulário pede **celular/WhatsApp** (obrigatório) para que a organização consiga avisar em caso de cancelamento. Ele aparece no detalhe de cada compra (com link do WhatsApp) e no CSV "todas as compras" — **não** aparece na lista impressa. É apagado junto com o nome na anonimização.
 

@@ -6,7 +6,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import postgres from "postgres";
-import { DEFAULT_CATEGORIES, DEFAULT_EVENT, DEFAULT_SERVICE_FEE_CENTS, DEFAULT_TERMS } from "../src/config/event";
+import { DEFAULT_CAPACITY, DEFAULT_CATEGORIES, DEFAULT_EVENT, DEFAULT_SERVICE_FEE_CENTS, DEFAULT_TERMS } from "../src/config/event";
 
 if (existsSync(".env")) process.loadEnvFile(".env");
 
@@ -62,7 +62,7 @@ async function main() {
       `;
       await tx`
         INSERT INTO settings (id, event, sales_open, capacity, service_fee_cents, current_terms_version_id)
-        VALUES (1, ${tx.json(DEFAULT_EVENT as never)}, false, NULL, ${DEFAULT_SERVICE_FEE_CENTS}, ${terms.id})
+        VALUES (1, ${tx.json(DEFAULT_EVENT as never)}, false, ${DEFAULT_CAPACITY}, ${DEFAULT_SERVICE_FEE_CENTS}, ${terms.id})
       `;
       for (const c of DEFAULT_CATEGORIES) {
         await tx`
