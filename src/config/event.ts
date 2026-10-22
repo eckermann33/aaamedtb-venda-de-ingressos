@@ -75,6 +75,7 @@ export const DEFAULT_TERMS: TermsContent = {
     "Não será permitida a entrada de objetos ou substâncias proibidos pela legislação ou pelas regras de segurança do evento.",
     "O camarote será vendido separadamente na entrada da festa, conforme disponibilidade.",
     "A compra do ingresso comum não garante acesso ao camarote.",
+    "O ingresso feminino é destinado a pessoas do gênero feminino; na portaria o documento com foto poderá ser conferido.",
     "O descumprimento das regras acima poderá gerar cobrança adicional na entrada da festa.",
   ],
   refundPolicy:
