@@ -51,11 +51,9 @@ export class MercadoPagoError extends Error {
 export type PreferenceInput = {
   /** Forma de pagamento oferecida no checkout: só Pix ou só cartão de crédito. */
   method: "pix" | "card";
+  /** Referência externa: id da linha principal do pedido (o pagamento cobre todos os ingressos). */
   purchaseId: string;
-  ticketPriceCents: number;
-  feeCents: number;
-  title: string;
-  categoryId: string;
+  items: { id: string; title: string; quantity: number; unitPriceCents: number }[];
   expiresAt: Date;
   backUrl: string;
   statementDescriptor: string;
@@ -126,27 +124,14 @@ export function createMercadoPagoClient(
         "POST",
         "/checkout/preferences",
         {
-          // A taxa de serviço aparece como item separado no checkout.
-          items: [
-            {
-              id: input.categoryId,
-              title: input.title,
-              quantity: 1,
-              currency_id: "BRL",
-              unit_price: centsToAmount(input.ticketPriceCents),
-            },
-            ...(input.feeCents > 0
-              ? [
-                  {
-                    id: "taxa-servico",
-                    title: "Taxa de serviço",
-                    quantity: 1,
-                    currency_id: "BRL",
-                    unit_price: centsToAmount(input.feeCents),
-                  },
-                ]
-              : []),
-          ],
+          // Um item por categoria de ingresso; a taxa de serviço aparece como item separado.
+          items: input.items.map((i) => ({
+            id: i.id,
+            title: i.title,
+            quantity: i.quantity,
+            currency_id: "BRL",
+            unit_price: centsToAmount(i.unitPriceCents),
+          })),
           external_reference: input.purchaseId,
           back_urls: { success: input.backUrl, failure: input.backUrl, pending: input.backUrl },
           auto_return: "approved",

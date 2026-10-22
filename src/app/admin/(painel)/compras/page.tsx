@@ -123,7 +123,7 @@ export default async function PurchasesPage(props: PageProps<"/admin/compras">) 
                 </td>
                 <td>{r.category_label}</td>
                 <td className="num">{formatBRL(r.amount_cents)}</td>
-                <td>{r.payment_method === "pix" ? "Pix" : "Cartão"}</td>
+                <td>{r.payment_method === "pix" ? "Pix" : r.payment_method === "card" ? "Cartão" : "Manual"}</td>
                 <td>
                   <StatusBadge status={r.status} />
                 </td>

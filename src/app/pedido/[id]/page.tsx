@@ -4,7 +4,7 @@ import { contactLinks } from "@/lib/contact";
 import { Satin, SiteFooter, SiteHeader } from "@/components/site";
 import { getSql } from "@/server/db";
 import { getMercadoPago } from "@/server/mercadopago";
-import { getPurchase, isUuid, reconcilePurchase, toPublic } from "@/server/purchases";
+import { getOrder, isUuid, reconcilePurchase, toPublic } from "@/server/purchases";
 import { loadSettings } from "@/server/settings";
 import OrderStatus from "./OrderStatus";
 
@@ -14,15 +14,15 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
   const { id } = await props.params;
   if (!isUuid(id)) notFound();
   const sql = getSql();
-  let purchase = await getPurchase(sql, id);
-  if (!purchase) notFound();
+  let order = await getOrder(sql, id);
+  if (!order) notFound();
 
   // Ao voltar do Mercado Pago, confere o pagamento direto na API (nunca confia nos parâmetros da URL).
-  if (purchase.status === "pending") {
+  if (order.lead.status === "pending") {
     const query = await props.searchParams;
     const hint = typeof query.payment_id === "string" ? query.payment_id : undefined;
     await reconcilePurchase(sql, getMercadoPago(), id, { hintPaymentId: hint, minIntervalSeconds: 3 });
-    purchase = (await getPurchase(sql, id))!;
+    order = (await getOrder(sql, id))!;
   }
   const settings = await loadSettings(sql);
 
@@ -37,7 +37,7 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
             <li className="done">2 · Pagamento</li>
             <li aria-current="step">3 · Confirmação</li>
           </ol>
-          <OrderStatus initial={toPublic(purchase)} contacts={contactLinks(settings.event)} eventName={settings.event.name} />
+          <OrderStatus initial={toPublic(order.lead, order.tickets)} contacts={contactLinks(settings.event)} eventName={settings.event.name} />
         </div>
       </main>
       <SiteFooter event={settings.event} />

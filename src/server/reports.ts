@@ -3,6 +3,8 @@ import type { Sql } from "./db";
 
 export type Stats = {
   confirmed: number;
+  manualConfirmed: number;
+  manualRevenueCents: number;
   byCategory: { categoryId: string; label: string; confirmed: number; revenueCents: number }[];
   approvedPayments: number;
   pendingActive: number;
@@ -23,6 +25,8 @@ export async function getStats(sql: Sql): Promise<Stats> {
   const [totals] = await sql<
     {
       confirmed: number;
+      manual_confirmed: number;
+      manual_revenue: number;
       gross: number;
       tickets: number;
       fees: number;
@@ -35,6 +39,8 @@ export async function getStats(sql: Sql): Promise<Stats> {
   >`
     SELECT
       count(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
+      count(*) FILTER (WHERE status = 'confirmed' AND source = 'manual')::int AS manual_confirmed,
+      coalesce(sum(amount_cents) FILTER (WHERE status = 'confirmed' AND source = 'manual'), 0)::int AS manual_revenue,
       coalesce(sum(amount_cents) FILTER (WHERE status = 'confirmed'), 0)::int AS gross,
       coalesce(sum(ticket_price_cents) FILTER (WHERE status = 'confirmed'), 0)::int AS tickets,
       coalesce(sum(fee_cents) FILTER (WHERE status = 'confirmed'), 0)::int AS fees,
@@ -65,6 +71,8 @@ export async function getStats(sql: Sql): Promise<Stats> {
   const capacity = cfg?.capacity ?? null;
   return {
     confirmed: totals.confirmed,
+    manualConfirmed: totals.manual_confirmed,
+    manualRevenueCents: totals.manual_revenue,
     byCategory: byCategory.map((r) => ({
       categoryId: r.category_id,
       label: r.label,
@@ -117,6 +125,9 @@ export type ListRow = {
   amount_cents: number;
   fee_cents: number;
   payment_method: string;
+  source: string;
+  note: string | null;
+  lead_id: string | null;
   status: string;
   payment_status: string | null;
   attention: string | null;
@@ -157,8 +168,8 @@ export async function listPurchases(sql: Sql, f: ListFilters): Promise<{ rows: L
 
   const [{ total }] = await sql<{ total: number }[]>`SELECT count(*)::int AS total FROM purchases ${where}`;
   const rows = await sql<ListRow[]>`
-    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, status, payment_status,
-           attention, mp_payment_id, ticket_code, created_at, confirmed_at
+    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, note, lead_id,
+           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at
     FROM purchases ${where}
     ORDER BY ${order}
     LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
@@ -187,9 +198,9 @@ export async function officialList(sql: Sql): Promise<OfficialRow[]> {
 /** Todas as compras (relatório financeiro), da mais antiga para a mais recente. */
 export async function allPurchases(sql: Sql): Promise<ListRow[]> {
   return sql<ListRow[]>`
-    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, status, payment_status,
-           attention, mp_payment_id, ticket_code, created_at, confirmed_at
+    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, note, lead_id,
+           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at
     FROM purchases
-    ORDER BY created_at ASC
+    ORDER BY created_at ASC, full_name ASC
   `;
 }

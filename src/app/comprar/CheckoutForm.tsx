@@ -18,7 +18,18 @@ type Props = {
   termsVersionId: number;
   terms: TermsContent;
   eventName: string;
+  maxTickets: number;
 };
+
+type Extra = { key: string; name: string; categoryId: string };
+
+/** Chave para detectar nomes repetidos no mesmo pedido (sem acento e sem maiúsculas). */
+function searchKey(raw: string): string {
+  return cleanName(raw)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
 
 function remember(id: string) {
   // Conveniência: lembra os pedidos feitos neste aparelho (não é registro oficial).
@@ -30,7 +41,7 @@ function remember(id: string) {
   }
 }
 
-export default function CheckoutForm({ categories, feeCents, preselected, termsVersionId, terms }: Props) {
+export default function CheckoutForm({ categories, feeCents, preselected, termsVersionId, terms, maxTickets }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
@@ -38,6 +49,8 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
   const [categoryId, setCategoryId] = useState(
     categories.some((c) => c.id === preselected) ? preselected! : categories.length === 1 ? categories[0].id : "",
   );
+  // Ingressos adicionais do mesmo pedido (cada um com o nome de quem vai entrar).
+  const [extras, setExtras] = useState<Extra[]>([]);
   const [adult, setAdult] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [method, setMethod] = useState<"pix" | "card">("pix");
@@ -48,7 +61,24 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
   const requestId = useRef<string | null>(null);
 
   const category = categories.find((c) => c.id === categoryId) ?? null;
-  const total = useMemo(() => (category ? category.priceCents + feeCents : 0), [category, feeCents]);
+  const lines = useMemo(() => {
+    const out: { name: string; category: Category | null }[] = [{ name, category }];
+    for (const x of extras) out.push({ name: x.name, category: categories.find((c) => c.id === x.categoryId) ?? null });
+    return out;
+  }, [name, category, extras, categories]);
+  const count = lines.length;
+  const ticketsTotal = lines.reduce((n, l) => n + (l.category?.priceCents ?? 0), 0);
+  const total = category ? ticketsTotal + feeCents * count : 0;
+
+  const addExtra = () =>
+    setExtras((list) =>
+      list.length + 1 >= maxTickets
+        ? list
+        : [...list, { key: crypto.randomUUID(), name: "", categoryId: categoryId || (categories[0]?.id ?? "") }],
+    );
+  const updateExtra = (key: string, patch: Partial<Extra>) =>
+    setExtras((list) => list.map((x) => (x.key === key ? { ...x, ...patch } : x)));
+  const removeExtra = (key: string) => setExtras((list) => list.filter((x) => x.key !== key));
 
   function goToReview(ev: React.FormEvent) {
     ev.preventDefault();
@@ -57,6 +87,13 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
     if (nameError) next.name = nameError;
     if (!phoneDigits(phone)) next.phone = "Informe um celular/WhatsApp com DDD, só com números.";
     if (!category) next.category = "Escolha a categoria do ingresso.";
+    const seen = new Set<string>([searchKey(name)]);
+    extras.forEach((x, i) => {
+      const error = validateFullName(x.name);
+      if (error) next[`extra${i}`] = `Ingresso ${i + 2}: ${error}`;
+      else if (seen.has(searchKey(x.name))) next[`extra${i}`] = `Ingresso ${i + 2}: este nome já está no pedido.`;
+      seen.add(searchKey(x.name));
+    });
     if (!adult) next.adult = "É obrigatório confirmar que você tem 18 anos ou mais.";
     if (!accepted) next.accepted = "É preciso aceitar as regras e os termos para continuar.";
     setErrors(next);
@@ -66,6 +103,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
       return;
     }
     setName(cleanName(name));
+    setExtras((list) => list.map((x) => ({ ...x, name: cleanName(x.name) })));
     requestId.current = crypto.randomUUID();
     setServerError(null);
     setStep(2);
@@ -86,6 +124,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           clientRequestId: requestId.current,
           fullName: name,
           categoryId,
+          extraTickets: extras.map((x) => ({ fullName: x.name, categoryId: x.categoryId })),
           adultConfirmed: adult,
           termsAccepted: accepted,
           termsVersionId,
@@ -130,7 +169,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
       {step === 1 && (
         <form className="card" onSubmit={goToReview} noValidate>
           <div className="field">
-            <label htmlFor="f-name">Nome completo</label>
+            <label htmlFor="f-name">{extras.length > 0 ? "Seu nome completo (ingresso 1)" : "Nome completo"}</label>
             <input
               id="f-name"
               className="input"
@@ -211,6 +250,54 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
             )}
           </fieldset>
 
+          {extras.map((x, i) => (
+            <div className="field extra-ticket" key={x.key}>
+              <label htmlFor={`f-extra${i}`}>Nome completo do ingresso {i + 2}</label>
+              <input
+                id={`f-extra${i}`}
+                className="input"
+                autoCapitalize="words"
+                placeholder="Nome de quem vai usar este ingresso"
+                value={x.name}
+                maxLength={120}
+                onChange={(e) => updateExtra(x.key, { name: e.target.value })}
+                aria-invalid={errors[`extra${i}`] ? true : undefined}
+                aria-describedby={errors[`extra${i}`] ? `e-extra${i}` : undefined}
+              />
+              <div className="extra-row">
+                <select
+                  className="input"
+                  aria-label={`Categoria do ingresso ${i + 2}`}
+                  value={x.categoryId}
+                  onChange={(e) => updateExtra(x.key, { categoryId: e.target.value })}
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label} · {formatBRL(c.priceCents)}
+                      {feeCents > 0 ? ` + ${formatBRL(feeCents)} de taxa` : ""}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeExtra(x.key)}>
+                  Remover
+                </button>
+              </div>
+              {errors[`extra${i}`] && (
+                <span className="field-error" id={`e-extra${i}`} role="alert">
+                  {errors[`extra${i}`]}
+                </span>
+              )}
+            </div>
+          ))}
+
+          {count < maxTickets ? (
+            <button type="button" className="btn btn-ghost btn-block add-ticket" onClick={addExtra}>
+              + Adicionar outro ingresso ao pedido
+            </button>
+          ) : (
+            <p className="hint">Limite de {maxTickets} ingressos por pedido.</p>
+          )}
+
           <div className="rules-box" aria-labelledby="t-rules">
             <h3 id="t-rules">Regras de entrada</h3>
             <ul>
@@ -268,7 +355,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           )}
 
           <button type="submit" className="btn btn-lg btn-block" style={{ marginTop: 8 }}>
-            Continuar {category && <>· {formatBRL(total)}</>}
+            Continuar {category && <>· {count > 1 && <>{count} ingressos · </>}{formatBRL(total)}</>}
           </button>
         </form>
       )}
@@ -279,26 +366,38 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
             Confira seu pedido
           </h2>
           <dl className="summary">
-            <div>
-              <dt>Nome na lista</dt>
-              <dd>{name}</dd>
-            </div>
+            {lines.map((l, i) => (
+              <div key={i}>
+                <dt>{count > 1 ? `Ingresso ${i + 1}` : "Nome na lista"}</dt>
+                <dd>
+                  {l.name}
+                  {count > 1 && l.category && (
+                    <>
+                      {" "}
+                      · {l.category.label} · {formatBRL(l.category.priceCents)}
+                    </>
+                  )}
+                </dd>
+              </div>
+            ))}
             <div>
               <dt>Celular / WhatsApp</dt>
               <dd>{phoneDigits(phone) ? formatPhone(phoneDigits(phone)!) : phone}</dd>
             </div>
+            {count === 1 && (
+              <div>
+                <dt>Categoria</dt>
+                <dd>{category.label}</dd>
+              </div>
+            )}
             <div>
-              <dt>Categoria</dt>
-              <dd>{category.label}</dd>
-            </div>
-            <div>
-              <dt>Ingresso</dt>
-              <dd>{formatBRL(category.priceCents)}</dd>
+              <dt>{count > 1 ? `Ingressos (${count})` : "Ingresso"}</dt>
+              <dd>{formatBRL(ticketsTotal)}</dd>
             </div>
             {feeCents > 0 && (
               <div>
-                <dt>Taxa de serviço</dt>
-                <dd>{formatBRL(feeCents)}</dd>
+                <dt>{count > 1 ? `Taxa de serviço (${count} × ${formatBRL(feeCents)})` : "Taxa de serviço"}</dt>
+                <dd>{formatBRL(feeCents * count)}</dd>
               </div>
             )}
             <div className="total">
@@ -310,7 +409,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           <div className="notice" style={{ marginBottom: 18 }}>
             <IconCheck size={20} />
             <span>
-              Ingresso individual e nominal. Entrada só para maiores de 18 anos, com documento oficial com foto. O
+              {count > 1 ? "Cada ingresso é individual e nominal." : "Ingresso individual e nominal."} Entrada só para maiores de 18 anos, com documento oficial com foto. O
               camarote é vendido à parte, na entrada. Sem cobranças além do total acima.
             </span>
           </div>

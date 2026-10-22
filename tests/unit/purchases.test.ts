@@ -35,14 +35,26 @@ describe("preços e categorias", () => {
     expect(p.ticket_price_cents).toBe(2000);
     expect(p.fee_cents).toBe(300);
     expect(p.amount_cents).toBe(2300);
-    expect(mp.prefCalls[0]).toMatchObject({ method: "pix", ticketPriceCents: 2000, feeCents: 300 });
+    expect(mp.prefCalls[0]).toMatchObject({
+      method: "pix",
+      items: [
+        { id: "feminino", quantity: 1, unitPriceCents: 2000 },
+        { id: "taxa-servico", quantity: 1, unitPriceCents: 300 },
+      ],
+    });
     expect(p.status).toBe("pending");
   });
 
   it("2. ingresso masculino: R$ 30,00 + taxa de R$ 3,00", async () => {
     const p = await createPurchase(deps(mp), request(terms, { categoryId: "masculino", paymentMethod: "card" }));
     expect(p.amount_cents).toBe(3300);
-    expect(mp.prefCalls[0]).toMatchObject({ method: "card", ticketPriceCents: 3000, feeCents: 300 });
+    expect(mp.prefCalls[0]).toMatchObject({
+      method: "card",
+      items: [
+        { id: "masculino", quantity: 1, unitPriceCents: 3000 },
+        { id: "taxa-servico", quantity: 1, unitPriceCents: 300 },
+      ],
+    });
     expect(p.checkout_url).toContain("https://mp.example/checkout/");
   });
 
@@ -65,7 +77,12 @@ describe("preços e categorias", () => {
     expect(tampered).not.toHaveProperty("amountCents");
     const p = await createPurchase(deps(mp), tampered);
     expect(p.amount_cents).toBe(2300);
-    expect(mp.prefCalls[0]).toMatchObject({ ticketPriceCents: 2000, feeCents: 300 });
+    expect(mp.prefCalls[0]).toMatchObject({
+      items: [
+        { id: "feminino", quantity: 1, unitPriceCents: 2000 },
+        { id: "taxa-servico", quantity: 1, unitPriceCents: 300 },
+      ],
+    });
   });
 
   it("rejeita categoria inexistente ou inativa", async () => {

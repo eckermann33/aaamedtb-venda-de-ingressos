@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Satin, SiteFooter, SiteHeader } from "@/components/site";
 import { getSql } from "@/server/db";
 import { getPublicSettings } from "@/server/public";
+import { MAX_TICKETS_PER_ORDER } from "@/config/event";
 import CheckoutForm from "./CheckoutForm";
 
 export const metadata: Metadata = { title: "Comprar ingresso" };
@@ -33,6 +34,7 @@ export default async function BuyPage(props: PageProps<"/comprar">) {
               termsVersionId={s.termsVersionId}
               terms={s.terms}
               eventName={s.event.name}
+              maxTickets={MAX_TICKETS_PER_ORDER}
             />
           ) : (
             <div className="card status-card">

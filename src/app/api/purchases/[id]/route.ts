@@ -1,7 +1,7 @@
 import { getSql } from "@/server/db";
 import { getMercadoPago } from "@/server/mercadopago";
 import { clientIp, errorResponse, json } from "@/server/http";
-import { getPurchase, isUuid, reconcilePurchase, toPublic } from "@/server/purchases";
+import { getOrder, isUuid, reconcilePurchase, toPublic } from "@/server/purchases";
 import { checkRateLimit, rateKey } from "@/server/rate-limit";
 
 /** Estado atual da compra, sempre lido do banco (e conferido no Mercado Pago se pendente). */
@@ -14,13 +14,13 @@ export async function GET(request: Request, ctx: RouteContext<"/api/purchases/[i
     return errorResponse("Muitas consultas. Aguarde um pouco.", 429, "rate_limited");
   }
 
-  let purchase = await getPurchase(sql, id);
-  if (!purchase) return errorResponse("Pedido não encontrado.", 404, "not_found");
+  let order = await getOrder(sql, id);
+  if (!order) return errorResponse("Pedido não encontrado.", 404, "not_found");
 
-  if (purchase.status === "pending") {
+  if (order.lead.status === "pending") {
     const hint = new URL(request.url).searchParams.get("payment_id") ?? undefined;
     await reconcilePurchase(sql, getMercadoPago(), id, { hintPaymentId: hint });
-    purchase = (await getPurchase(sql, id))!;
+    order = (await getOrder(sql, id))!;
   }
-  return json({ purchase: toPublic(purchase) });
+  return json({ purchase: toPublic(order.lead, order.tickets) });
 }

@@ -5,8 +5,8 @@ import { formatPhone } from "@/lib/contact";
 import { formatDateTime } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
 import { getSql } from "@/server/db";
-import { getPurchase, isUuid } from "@/server/purchases";
-import { AnonymizeButton, RefundButton, TransferForm } from "../../actions";
+import { getOrderTickets, getPurchase, isUuid } from "@/server/purchases";
+import { AnonymizeButton, CancelManualButton, RefundButton, TransferForm } from "../../actions";
 
 export default async function PurchaseDetail(props: PageProps<"/admin/compras/[id]">) {
   const { id } = await props.params;
@@ -20,6 +20,10 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
     FROM payments WHERE purchase_id = ${id} ORDER BY created_at`;
   const [terms] = await sql<{ created_at: Date }[]>`SELECT created_at FROM terms_versions WHERE id = ${p.terms_version_id}`;
   const row = p;
+  const manual = p.source === "manual";
+  // Pedido com vários ingressos: o pagamento e o estorno ficam na linha principal.
+  const orderLeadId = p.lead_id ?? p.id;
+  const order = manual ? [] : await getOrderTickets(sql, orderLeadId);
 
   return (
     <>
@@ -31,9 +35,32 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
         <StatusBadge status={p.status} /> {p.attention && <span className="badge badge-warn">⚠ {ATTENTION_LABEL[p.attention]}</span>}
       </p>
 
+      {p.lead_id && (
+        <div className="notice" style={{ marginBottom: 16 }}>
+          <span>
+            Este ingresso faz parte de um pedido com {order.length} ingressos. O pagamento e o estorno ficam na{" "}
+            <Link href={`/admin/compras/${p.lead_id}`}>compra principal</Link>.
+          </span>
+        </div>
+      )}
+      {!p.lead_id && order.length > 1 && (
+        <div className="panel" style={{ marginTop: 0 }}>
+          <h2>Pedido com {order.length} ingressos</h2>
+          <p className="hint">Um único pagamento cobre todos. O estorno devolve o valor do pedido inteiro.</p>
+          <ul className="checklist" style={{ gap: 8 }}>
+            {order.map((t) => (
+              <li key={t.id} style={{ display: "block" }}>
+                <Link href={`/admin/compras/${t.id}`}>{t.full_name}</Link> · {t.category_label} · {formatBRL(t.amount_cents)}{" "}
+                <StatusBadge status={t.status} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="grid-2">
         <div className="panel" style={{ marginTop: 0 }}>
-          <h2>Compra</h2>
+          <h2>{manual ? "Ingresso manual" : "Compra"}</h2>
           <dl className="summary">
             <div>
               <dt>Celular / WhatsApp</dt>
@@ -51,7 +78,11 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
             <div><dt>Ingresso</dt><dd>{formatBRL(p.ticket_price_cents)}</dd></div>
             <div><dt>Taxa de serviço</dt><dd>{formatBRL(p.fee_cents)}</dd></div>
             <div><dt>Total</dt><dd>{formatBRL(p.amount_cents)}</dd></div>
-            <div><dt>Forma</dt><dd>{p.payment_method === "pix" ? "Pix" : "Cartão (Checkout Pro)"}</dd></div>
+            <div>
+              <dt>Forma</dt>
+              <dd>{manual ? "Lançamento manual" : p.payment_method === "pix" ? "Pix" : "Cartão (Checkout Pro)"}</dd>
+            </div>
+            {p.note && <div><dt>Observação</dt><dd>{p.note}</dd></div>}
             <div><dt>Código interno</dt><dd>{p.ticket_code ?? "—"}</dd></div>
             <div><dt>Criada em</dt><dd>{formatDateTime(p.created_at)}</dd></div>
             <div><dt>Confirmada em</dt><dd>{formatDateTime(p.confirmed_at)}</dd></div>
@@ -63,7 +94,8 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
         </div>
         <div className="panel" style={{ marginTop: 0 }}>
           <h2>Pagamentos no Mercado Pago</h2>
-          {payments.length === 0 && <p className="hint">Nenhum pagamento registrado.</p>}
+          {manual && <p className="hint">Ingresso lançado manualmente: não há pagamento no Mercado Pago.</p>}
+          {!manual && payments.length === 0 && <p className="hint">Nenhum pagamento registrado.</p>}
           <ul className="checklist" style={{ gap: 14 }}>
             {payments.map((pay) => (
               <li key={pay.mp_payment_id} style={{ display: "block" }}>
@@ -94,6 +126,14 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
             mais. O código interno do ingresso continua o mesmo.
           </p>
           <TransferForm purchaseId={p.id} currentName={p.full_name} />
+        </div>
+      )}
+
+      {manual && p.status === "confirmed" && (
+        <div className="panel">
+          <h2>Remover da lista</h2>
+          <p className="hint">Use se o ingresso foi lançado por engano. A vaga é liberada e o nome sai da lista de entrada.</p>
+          <CancelManualButton purchaseId={p.id} name={p.full_name} />
         </div>
       )}
 

@@ -76,7 +76,9 @@ export default async function Dashboard() {
         <div className="stat">
           <div className="k">Ingressos confirmados</div>
           <div className="v neon">{stats.confirmed}</div>
-          <div className="d">na lista oficial</div>
+          <div className="d">
+            na lista oficial{stats.manualConfirmed > 0 && <> · {stats.manualConfirmed} lançado(s) manualmente</>}
+          </div>
         </div>
         {stats.byCategory.map((c) => (
           <div className="stat" key={c.categoryId}>
@@ -96,6 +98,7 @@ export default async function Dashboard() {
           <div className="d">
             Ingressos {formatBRL(stats.ticketRevenueCents)} + taxas {formatBRL(stats.feeRevenueCents)} · antes das tarifas
             do Mercado Pago
+            {stats.manualConfirmed > 0 && <> · inclui {formatBRL(stats.manualRevenueCents)} de ingressos manuais</>}
           </div>
         </div>
         <div className="stat">
@@ -123,7 +126,10 @@ export default async function Dashboard() {
       <div className="panel">
         <h2>Ações rápidas</h2>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link className="btn btn-sm" href="/admin/lista">
+          <Link className="btn btn-sm" href="/admin/manual">
+            Lançar ingresso manual
+          </Link>
+          <Link className="btn btn-ghost btn-sm" href="/admin/lista">
             Lista de entrada (imprimir)
           </Link>
           <a className="btn btn-ghost btn-sm" href="/api/admin/export?scope=official">

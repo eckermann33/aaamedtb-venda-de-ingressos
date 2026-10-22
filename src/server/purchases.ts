@@ -1,5 +1,5 @@
-import { randomBytes } from "node:crypto";
-import { PAYMENT_WINDOW_MINUTES, RESERVATION_GRACE_MINUTES } from "@/config/event";
+import { randomBytes, randomUUID } from "node:crypto";
+import { MAX_TICKETS_PER_ORDER, PAYMENT_WINDOW_MINUTES, RESERVATION_GRACE_MINUTES } from "@/config/event";
 import { phoneDigits } from "@/lib/contact";
 import { cleanName, searchableName, validateFullName, type PurchaseRequest } from "@/lib/validation";
 import type { Sql, TxSql } from "./db";
@@ -19,7 +19,10 @@ export type PurchaseRow = {
   ticket_price_cents: number;
   fee_cents: number;
   amount_cents: number;
-  payment_method: "pix" | "card";
+  payment_method: "pix" | "card" | "manual";
+  lead_id: string | null;
+  source: "online" | "manual";
+  note: string | null;
   status: PurchaseStatus;
   payment_status: string | null;
   payment_status_detail: string | null;
@@ -64,13 +67,16 @@ export function generateTicketCode(): string {
   return `INV-${out}`;
 }
 
-/** Ingressos que ocupam vaga: confirmados + reservas pendentes ainda válidas. */
-async function countOccupied(tx: TxSql, excludeId: string | null): Promise<number> {
+/**
+ * Ingressos que ocupam vaga: confirmados + reservas pendentes ainda válidas.
+ * `excludeLeadId` ignora todos os ingressos de um pedido (o próprio, ao confirmá-lo).
+ */
+async function countOccupied(tx: TxSql, excludeLeadId: string | null): Promise<number> {
   const [row] = await tx<{ n: number }[]>`
     SELECT count(*)::int AS n
     FROM purchases
     WHERE (status = 'confirmed' OR (status = 'pending' AND expires_at > now()))
-      AND ${excludeId ? tx`id <> ${excludeId}` : tx`true`}
+      AND ${excludeLeadId ? tx`id <> ${excludeLeadId} AND lead_id IS DISTINCT FROM ${excludeLeadId}` : tx`true`}
   `;
   return row.n;
 }
@@ -82,27 +88,46 @@ export type CreateDeps = {
   envState: { mpAccessToken: boolean; mpWebhookSecret: boolean };
 };
 
+export type TicketHolder = { fullName: string; categoryId: string };
+
 /**
- * Cria a compra pendente (com reserva de vaga) e inicia o pagamento no Mercado Pago.
- * O preço vem SEMPRE do banco de dados — nenhum valor enviado pelo navegador é usado.
+ * Cria o pedido pendente (com reserva de vagas) e inicia o pagamento no Mercado Pago.
+ * O pedido tem de 1 a MAX_TICKETS_PER_ORDER ingressos, cada um com o nome do titular; o
+ * pagamento é único. O preço vem SEMPRE do banco de dados — nenhum valor do navegador é usado.
+ * Retorna a linha principal do pedido (os demais ingressos apontam para ela em lead_id).
  */
 export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): Promise<PurchaseRow> {
   const { sql, mp } = deps;
-  const nameError = validateFullName(input.fullName);
-  if (nameError) throw new PurchaseError("invalid_name", nameError, 400);
+  const holders: TicketHolder[] = [
+    { fullName: input.fullName, categoryId: input.categoryId },
+    ...(input.extraTickets ?? []),
+  ];
+  if (holders.length > MAX_TICKETS_PER_ORDER) {
+    throw new PurchaseError("too_many", `Você pode comprar até ${MAX_TICKETS_PER_ORDER} ingressos por pedido.`, 400);
+  }
+  for (const [i, h] of holders.entries()) {
+    const nameError = validateFullName(h.fullName);
+    if (nameError) {
+      throw new PurchaseError("invalid_name", holders.length > 1 ? `Ingresso ${i + 1}: ${nameError}` : nameError, 400);
+    }
+  }
   const buyerPhone = phoneDigits(input.buyerPhone);
   if (!buyerPhone) {
     throw new PurchaseError("invalid_phone", "Informe um celular/WhatsApp com DDD, só com números.", 400);
   }
-  const fullName = cleanName(input.fullName);
+  const tickets = holders.map((h) => ({ fullName: cleanName(h.fullName), categoryId: h.categoryId }));
+  const searchKeys = tickets.map((t) => searchableName(t.fullName));
+  if (new Set(searchKeys).size !== searchKeys.length) {
+    throw new PurchaseError("duplicate_name", "Há nomes repetidos no pedido. Cada ingresso precisa de uma pessoa diferente.", 400);
+  }
 
   const existing = await findByClientRequestId(sql, input.clientRequestId);
-  if (existing) return sameRequestOrThrow(existing, fullName, input);
+  if (existing) return sameRequestOrThrow(sql, existing, tickets, input);
 
   const windowMs = PAYMENT_WINDOW_MINUTES * 60_000;
   const reservationMs = windowMs + RESERVATION_GRACE_MINUTES * 60_000;
 
-  const purchase = await sql.begin(async (tx) => {
+  const created = await sql.begin(async (tx) => {
     // Trava a linha de configuração: serializa reservas e respeita a lotação mesmo com compras simultâneas.
     const settings = await loadSettings(tx, { forUpdate: true });
     if (!settings.salesOpen) {
@@ -118,54 +143,82 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
         409,
       );
     }
-    const category = settings.categories.find((c) => c.id === input.categoryId && c.active);
-    if (!category) throw new PurchaseError("invalid_category", "Categoria de ingresso inválida.", 400);
+    const priced = tickets.map((t) => {
+      const category = settings.categories.find((c) => c.id === t.categoryId && c.active);
+      if (!category) throw new PurchaseError("invalid_category", "Categoria de ingresso inválida.", 400);
+      return { ...t, category };
+    });
 
     if (settings.capacity !== null) {
       const occupied = await countOccupied(tx, null);
-      if (occupied >= settings.capacity) {
+      const left = settings.capacity - occupied;
+      if (left <= 0) {
         throw new PurchaseError("sold_out", "Os ingressos esgotaram (ou estão todos reservados no momento).", 409);
+      }
+      if (priced.length > left) {
+        throw new PurchaseError(
+          "not_enough",
+          `Restam apenas ${left} ${left === 1 ? "ingresso disponível" : "ingressos disponíveis"}. Diminua a quantidade do pedido.`,
+          409,
+        );
       }
     }
 
-    const rows = await tx<PurchaseRow[]>`
+    const insert = (t: (typeof priced)[number], clientRequestId: string, leadId: string | null) => tx<PurchaseRow[]>`
       INSERT INTO purchases (
-        client_request_id, full_name, name_search, buyer_phone, category_id, category_label,
+        client_request_id, lead_id, full_name, name_search, buyer_phone, category_id, category_label,
         ticket_price_cents, fee_cents, amount_cents, payment_method, adult_confirmed, terms_version_id, terms_accepted_at, expires_at
       ) VALUES (
-        ${input.clientRequestId}, ${fullName}, ${searchableName(fullName)}, ${buyerPhone}, ${category.id}, ${category.label},
-        ${category.priceCents}, ${settings.serviceFeeCents}, ${category.priceCents + settings.serviceFeeCents},
+        ${clientRequestId}, ${leadId}, ${t.fullName}, ${searchableName(t.fullName)}, ${buyerPhone}, ${t.category.id}, ${t.category.label},
+        ${t.category.priceCents}, ${settings.serviceFeeCents}, ${t.category.priceCents + settings.serviceFeeCents},
         ${input.paymentMethod}, true, ${settings.termsVersionId}, now(),
         now() + ${reservationMs / 1000} * interval '1 second'
       )
       ON CONFLICT (client_request_id) DO NOTHING
       RETURNING *
     `;
-    return rows[0] ?? null;
+    const [leadRow] = await insert(priced[0], input.clientRequestId, null);
+    if (!leadRow) return null;
+    for (const t of priced.slice(1)) await insert(t, randomUUID(), leadRow.id);
+    return { lead: leadRow, priced, eventName: settings.event.name, statementDescriptor: settings.event.statementDescriptor, fee: settings.serviceFeeCents };
   });
 
-  if (!purchase) {
+  if (!created) {
     // Outra requisição com a mesma chave chegou primeiro (clique duplo).
     const again = await findByClientRequestId(sql, input.clientRequestId);
     if (!again) throw new PurchaseError("conflict", "Tente novamente.", 409);
-    return sameRequestOrThrow(again, fullName, input);
+    return sameRequestOrThrow(sql, again, tickets, input);
   }
+  const purchase = created.lead;
 
-  const settings = await loadSettings(sql);
-  const title = `Ingresso ${settings.event.name} — ${purchase.category_label}`;
+  // Itens do checkout: um por categoria (com a quantidade) + a taxa de serviço por ingresso.
+  const byCategory = new Map<string, { id: string; title: string; quantity: number; unitPriceCents: number }>();
+  for (const t of created.priced) {
+    const item = byCategory.get(t.category.id);
+    if (item) item.quantity += 1;
+    else {
+      byCategory.set(t.category.id, {
+        id: t.category.id,
+        title: `Ingresso ${created.eventName} — ${t.category.label}`,
+        quantity: 1,
+        unitPriceCents: t.category.priceCents,
+      });
+    }
+  }
+  const items = [...byCategory.values()];
+  if (created.fee > 0) {
+    items.push({ id: "taxa-servico", title: "Taxa de serviço", quantity: created.priced.length, unitPriceCents: created.fee });
+  }
 
   try {
     // Pix e cartão usam o Checkout Pro: o comprador é levado ao ambiente do Mercado Pago.
     const preference = await mp.createCheckoutPreference({
-      method: purchase.payment_method,
+      method: purchase.payment_method as "pix" | "card",
       purchaseId: purchase.id,
-      ticketPriceCents: purchase.ticket_price_cents,
-      feeCents: purchase.fee_cents,
-      title,
-      categoryId: purchase.category_id,
+      items,
       expiresAt: new Date(Date.now() + windowMs),
       backUrl: `${deps.appUrl}/pedido/${purchase.id}`,
-      statementDescriptor: settings.event.statementDescriptor,
+      statementDescriptor: created.statementDescriptor,
     });
     await sql`
       UPDATE purchases SET mp_preference_id = ${preference.id}, checkout_url = ${preference.init_point}, updated_at = now()
@@ -173,7 +226,10 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
     `;
   } catch (err) {
     logger.error("Falha ao iniciar pagamento no Mercado Pago", { purchaseId: purchase.id, ...errorInfo(err) });
-    await sql`UPDATE purchases SET status = 'failed', updated_at = now() WHERE id = ${purchase.id} AND status = 'pending'`;
+    await sql`
+      UPDATE purchases SET status = 'failed', updated_at = now()
+      WHERE (id = ${purchase.id} OR lead_id = ${purchase.id}) AND status = 'pending'
+    `;
     throw new PurchaseError(
       "payment_unavailable",
       "Não foi possível iniciar o pagamento agora. Nenhuma cobrança foi feita. Tente novamente em instantes.",
@@ -184,14 +240,22 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
   return (await getPurchase(sql, purchase.id))!;
 }
 
-function sameRequestOrThrow(existing: PurchaseRow, fullName: string, input: PurchaseRequest): PurchaseRow {
-  if (
-    existing.full_name !== fullName ||
-    existing.category_id !== input.categoryId ||
-    existing.payment_method !== input.paymentMethod
-  ) {
-    throw new PurchaseError("conflict", "Esta tentativa de compra já foi usada. Recarregue a página.", 409);
-  }
+async function sameRequestOrThrow(
+  sql: Sql,
+  existing: PurchaseRow,
+  tickets: { fullName: string; categoryId: string }[],
+  input: PurchaseRequest,
+): Promise<PurchaseRow> {
+  const group = await getOrderTickets(sql, existing.id);
+  const key = (name: string, category: string) => `${category}|${name}`;
+  const sent = tickets.map((t) => key(t.fullName, t.categoryId)).sort();
+  const saved = group.map((g) => key(g.full_name, g.category_id)).sort();
+  const same =
+    existing.lead_id === null &&
+    existing.payment_method === input.paymentMethod &&
+    sent.length === saved.length &&
+    sent.every((k, i) => k === saved[i]);
+  if (!same) throw new PurchaseError("conflict", "Esta tentativa de compra já foi usada. Recarregue a página.", 409);
   return existing;
 }
 
@@ -204,6 +268,21 @@ export async function getPurchase(sql: Sql | TxSql, id: string): Promise<Purchas
   if (!isUuid(id)) return null;
   const rows = await sql<PurchaseRow[]>`SELECT * FROM purchases WHERE id = ${id}`;
   return rows[0] ?? null;
+}
+
+/** Todos os ingressos de um pedido (a linha principal primeiro), na ordem em que foram informados. */
+export async function getOrderTickets(sql: Sql | TxSql, leadId: string): Promise<PurchaseRow[]> {
+  return sql<PurchaseRow[]>`
+    SELECT * FROM purchases WHERE id = ${leadId} OR lead_id = ${leadId}
+    ORDER BY (lead_id IS NULL) DESC, name_search, id
+  `;
+}
+
+/** Pedido online (linha principal + ingressos), ou null se o id não for de um pedido online. */
+export async function getOrder(sql: Sql | TxSql, id: string): Promise<{ lead: PurchaseRow; tickets: PurchaseRow[] } | null> {
+  const lead = await getPurchase(sql, id);
+  if (!lead || lead.lead_id !== null || lead.source !== "online") return null;
+  return { lead, tickets: await getOrderTickets(sql, lead.id) };
 }
 
 export type ApplyResult =
@@ -227,14 +306,23 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
   const paymentId = String(payment.id);
 
   return sql.begin(async (tx) => {
-    const rows = await tx<PurchaseRow[]>`SELECT * FROM purchases WHERE id = ${purchaseId} FOR UPDATE`;
+    // O pagamento pertence ao pedido: a linha principal (lead_id nulo) e, se houver, os outros ingressos.
+    const rows = await tx<PurchaseRow[]>`
+      SELECT * FROM purchases WHERE id = ${purchaseId} AND lead_id IS NULL AND source = 'online' FOR UPDATE
+    `;
     const purchase = rows[0];
     if (!purchase) return "unknown_reference" as const;
+    const group = await tx<PurchaseRow[]>`
+      SELECT * FROM purchases WHERE lead_id = ${purchase.id} ORDER BY name_search, id FOR UPDATE
+    `;
+    const inOrder = tx`(id = ${purchase.id} OR lead_id = ${purchase.id})`;
+    const orderSize = group.length + 1;
+    const orderAmount = group.reduce((sum, t) => sum + t.amount_cents, purchase.amount_cents);
 
-    // Validação do pagamento contra a compra.
+    // Validação do pagamento contra o pedido (valor total de todos os ingressos).
     const amountCents = payment.transaction_amount == null ? null : Math.round(payment.transaction_amount * 100);
     let validationError: string | null = null;
-    if (amountCents !== purchase.amount_cents) validationError = "amount_mismatch";
+    if (amountCents !== orderAmount) validationError = "amount_mismatch";
     else if (payment.currency_id && payment.currency_id !== "BRL") validationError = "currency_mismatch";
 
     await tx`
@@ -276,7 +364,7 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
         const [cfg] = await tx<{ capacity: number | null }[]>`SELECT capacity FROM settings WHERE id = 1 FOR UPDATE`;
         if (cfg.capacity !== null) {
           const occupied = await countOccupied(tx, purchase.id);
-          if (occupied >= cfg.capacity) {
+          if (occupied + orderSize > cfg.capacity) {
             await tx`
               UPDATE purchases SET attention = 'over_capacity', payment_status = 'approved', updated_at = now()
               WHERE id = ${purchase.id}
@@ -285,19 +373,23 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
             return "over_capacity" as const;
           }
         }
-        await tx`
-          UPDATE purchases SET
-            status = 'confirmed',
-            payment_status = 'approved',
-            payment_status_detail = ${payment.status_detail ?? null},
-            mp_payment_id = ${paymentId},
-            ticket_code = ${generateTicketCode()},
-            confirmed_at = ${payment.date_approved ? new Date(payment.date_approved) : new Date()},
-            attention = CASE WHEN attention IN ('over_capacity', 'amount_mismatch') THEN NULL ELSE attention END,
-            updated_at = now()
-          WHERE id = ${purchase.id} AND status <> 'confirmed'
-        `;
-        logger.info("Compra confirmada", { purchaseId, paymentId });
+        const confirmedAt = payment.date_approved ? new Date(payment.date_approved) : new Date();
+        // Cada ingresso do pedido recebe o seu código; o pagamento fica registrado na linha principal.
+        for (const t of [purchase, ...group]) {
+          await tx`
+            UPDATE purchases SET
+              status = 'confirmed',
+              payment_status = 'approved',
+              payment_status_detail = ${payment.status_detail ?? null},
+              mp_payment_id = ${t.id === purchase.id ? paymentId : null},
+              ticket_code = ${generateTicketCode()},
+              confirmed_at = ${confirmedAt},
+              attention = CASE WHEN attention IN ('over_capacity', 'amount_mismatch') THEN NULL ELSE attention END,
+              updated_at = now()
+            WHERE id = ${t.id} AND status <> 'confirmed'
+          `;
+        }
+        logger.info("Compra confirmada", { purchaseId, paymentId, tickets: orderSize });
         return "confirmed" as const;
       }
 
@@ -307,7 +399,7 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
           await tx`
             UPDATE purchases SET status = 'refunded', payment_status = ${payment.status},
               payment_status_detail = ${payment.status_detail ?? null}, refunded_at = now(), updated_at = now()
-            WHERE id = ${purchase.id}
+            WHERE ${inOrder} AND status = 'confirmed'
           `;
           return "refunded" as const;
         }
@@ -364,11 +456,21 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
 
 /** Encerra reservas vencidas que não foram pagas. */
 export async function expireIfStale(sql: Sql, id: string) {
-  await sql`
-    UPDATE purchases
-    SET status = CASE WHEN payment_status = 'rejected' THEN 'rejected' ELSE 'expired' END, updated_at = now()
-    WHERE id = ${id} AND status = 'pending' AND expires_at < now()
-  `;
+  await sql.begin(async (tx) => {
+    const lead = await tx<{ status: string }[]>`
+      UPDATE purchases
+      SET status = CASE WHEN payment_status = 'rejected' THEN 'rejected' ELSE 'expired' END, updated_at = now()
+      WHERE id = ${id} AND lead_id IS NULL AND status = 'pending' AND expires_at < now()
+      RETURNING status
+    `;
+    // Os demais ingressos do pedido acompanham a linha principal.
+    if (lead[0]) {
+      await tx`
+        UPDATE purchases SET status = ${lead[0].status}, updated_at = now()
+        WHERE lead_id = ${id} AND status = 'pending'
+      `;
+    }
+  });
 }
 
 /**
@@ -384,7 +486,7 @@ export async function reconcilePurchase(
   const interval = opts.minIntervalSeconds ?? 10;
   const claimed = await sql<PurchaseRow[]>`
     UPDATE purchases SET last_checked_at = now()
-    WHERE id = ${id}
+    WHERE id = ${id} AND lead_id IS NULL AND source = 'online'
       AND (status = 'pending' OR attention IS NOT NULL)
       AND (last_checked_at IS NULL OR last_checked_at < now() - ${interval} * interval '1 second')
     RETURNING *
@@ -413,7 +515,8 @@ export async function reconcilePurchase(
 export async function reconcilePending(sql: Sql, mp: MercadoPagoClient, limit = 50): Promise<number> {
   const rows = await sql<{ id: string }[]>`
     SELECT id FROM purchases
-    WHERE status = 'pending' OR (attention IS NOT NULL AND attention <> 'in_mediation')
+    WHERE lead_id IS NULL AND source = 'online'
+      AND (status = 'pending' OR (attention IS NOT NULL AND attention <> 'in_mediation'))
     ORDER BY created_at
     LIMIT ${limit}
   `;
@@ -437,10 +540,16 @@ export type PublicState =
   | "failed"
   | "attention";
 
+export type PublicTicket = { fullName: string; categoryLabel: string; ticketPriceCents: number };
+
 export type PublicPurchase = {
   id: string;
+  /** Titular do primeiro ingresso (quem fez o pedido). */
   fullName: string;
   categoryLabel: string;
+  /** Todos os ingressos do pedido. */
+  tickets: PublicTicket[];
+  /** Totais do pedido: soma dos ingressos, das taxas e valor final. */
   ticketPriceCents: number;
   feeCents: number;
   amountCents: number;
@@ -476,17 +585,24 @@ export function publicState(p: PurchaseRow, now = new Date()): PublicState {
   }
 }
 
-export function toPublic(p: PurchaseRow): PublicPurchase {
+/** `order` = todos os ingressos do pedido (a linha principal primeiro). */
+export function toPublic(p: PurchaseRow, order: PurchaseRow[] = [p]): PublicPurchase {
   const state = publicState(p);
   const awaiting = state === "awaiting_payment" || state === "payment_rejected";
+  const sum = (f: (t: PurchaseRow) => number) => order.reduce((n, t) => n + f(t), 0);
   return {
     id: p.id,
     fullName: p.full_name,
     categoryLabel: p.category_label,
-    ticketPriceCents: p.ticket_price_cents,
-    feeCents: p.fee_cents,
-    amountCents: p.amount_cents,
-    paymentMethod: p.payment_method,
+    tickets: order.map((t) => ({
+      fullName: t.full_name,
+      categoryLabel: t.category_label,
+      ticketPriceCents: t.ticket_price_cents,
+    })),
+    ticketPriceCents: sum((t) => t.ticket_price_cents),
+    feeCents: sum((t) => t.fee_cents),
+    amountCents: sum((t) => t.amount_cents),
+    paymentMethod: p.payment_method === "card" ? "card" : "pix",
     state,
     // Prazo mostrado ao comprador (a reserva interna dura um pouco mais).
     expiresAt: new Date(p.expires_at.getTime() - RESERVATION_GRACE_MINUTES * 60_000).toISOString(),
@@ -560,4 +676,89 @@ export async function anonymizeAll(sql: Sql): Promise<number> {
     RETURNING id
   `;
   return rows.length;
+}
+
+// ---------------------------------------------------------------------------
+// Ingressos manuais (lançados pela organização no painel).
+// ---------------------------------------------------------------------------
+
+export type ManualTicketsInput = {
+  /** Um nome completo por ingresso. */
+  names: string[];
+  categoryId: string;
+  /** Valor pago por ingresso, em centavos. Nulo = preço da categoria; 0 = cortesia. */
+  priceCents: number | null;
+  /** Celular/WhatsApp de quem comprou (opcional). */
+  phone: string | null;
+  /** Observação interna: forma de pagamento, quem vendeu, convidado de quem... */
+  note: string | null;
+};
+
+/**
+ * Lança ingressos já pagos fora do site (venda por WhatsApp, Pix direto, dinheiro) ou cortesias.
+ * Nascem confirmados, entram na lista oficial e ocupam vaga na lotação, sem taxa de serviço.
+ */
+export async function createManualTickets(sql: Sql, input: ManualTicketsInput): Promise<PurchaseRow[]> {
+  const names = input.names.map(cleanName).filter((n) => n.length > 0);
+  if (names.length === 0) throw new PurchaseError("invalid_name", "Informe pelo menos um nome.", 400);
+  if (names.length > 50) throw new PurchaseError("too_many", "Lance no máximo 50 ingressos por vez.", 400);
+  for (const name of names) {
+    const error = validateFullName(name);
+    if (error) throw new PurchaseError("invalid_name", `${name}: ${error}`, 400);
+  }
+  const phone = input.phone && input.phone.trim() ? phoneDigits(input.phone) : null;
+  if (input.phone && input.phone.trim() && !phone) {
+    throw new PurchaseError("invalid_phone", "Celular inválido. Informe com DDD, só números (ou deixe em branco).", 400);
+  }
+  if (input.priceCents !== null && (!Number.isInteger(input.priceCents) || input.priceCents < 0 || input.priceCents > 100_000)) {
+    throw new PurchaseError("invalid_price", "Valor inválido.", 400);
+  }
+  const note = input.note?.trim() ? input.note.trim().slice(0, 200) : null;
+
+  return sql.begin(async (tx) => {
+    const settings = await loadSettings(tx, { forUpdate: true });
+    const category = settings.categories.find((c) => c.id === input.categoryId);
+    if (!category) throw new PurchaseError("invalid_category", "Categoria de ingresso inválida.", 400);
+    if (settings.capacity !== null) {
+      const left = settings.capacity - (await countOccupied(tx, null));
+      if (names.length > left) {
+        throw new PurchaseError(
+          "not_enough",
+          left <= 0
+            ? "A lotação já foi atingida. Aumente o limite em Configurações para lançar mais ingressos."
+            : `Restam apenas ${left} vagas na lotação. Aumente o limite em Configurações ou lance menos ingressos.`,
+          409,
+        );
+      }
+    }
+    const price = input.priceCents ?? category.priceCents;
+    const rows: PurchaseRow[] = [];
+    for (const name of names) {
+      const [row] = await tx<PurchaseRow[]>`
+        INSERT INTO purchases (
+          client_request_id, full_name, name_search, buyer_phone, category_id, category_label,
+          ticket_price_cents, fee_cents, amount_cents, payment_method, source, note, status,
+          adult_confirmed, terms_version_id, terms_accepted_at, ticket_code, expires_at, confirmed_at
+        ) VALUES (
+          ${randomUUID()}, ${name}, ${searchableName(name)}, ${phone}, ${category.id}, ${category.label},
+          ${price}, 0, ${price}, 'manual', 'manual', ${note}, 'confirmed',
+          true, ${settings.termsVersionId}, now(), ${generateTicketCode()}, now(), now()
+        )
+        RETURNING *
+      `;
+      rows.push(row);
+    }
+    return rows;
+  });
+}
+
+/** Remove um ingresso manual da lista (ex.: lançado por engano). Libera a vaga. */
+export async function cancelManualTicket(sql: Sql, id: string): Promise<PurchaseRow> {
+  const rows = await sql<PurchaseRow[]>`
+    UPDATE purchases SET status = 'cancelled', updated_at = now()
+    WHERE id = ${id} AND source = 'manual' AND status = 'confirmed'
+    RETURNING *
+  `;
+  if (!rows[0]) throw new PurchaseError("not_cancellable", "Só ingressos manuais confirmados podem ser removidos.", 409);
+  return rows[0];
 }

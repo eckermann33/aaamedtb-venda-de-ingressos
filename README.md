@@ -293,6 +293,10 @@ Depois, troque `MP_ACCESS_TOKEN` (e o webhook/assinatura, se diferente) para **p
 
 **Lista para imprimir:** painel → **Lista de entrada** → **Imprimir lista** (A4, ordem alfabética, caixinha "Entrou", número, categoria e código interno). Contém **somente pagamentos aprovados**. Feche as vendas antes de imprimir a versão final e leve duas cópias.
 
+**Ingresso manual (venda por WhatsApp, cortesia, convidado):** painel → **Ingresso manual**. Escolha a categoria, confira o valor (vem com o preço da categoria; use `0` para cortesia), cole os nomes (um por linha, até 50 por vez), marque a confirmação de maioridade/pagamento e lance. Os ingressos nascem **confirmados**, entram na **lista impressa**, no CSV e na **lotação**, e **não têm taxa de serviço** nem passam pelo Mercado Pago. Lançou errado? Na mesma tela, **Remover** libera a vaga (fica registrado na auditoria). Quando a lotação acaba, o painel pede para aumentar o limite em Configurações.
+
+**Vários ingressos por compra:** no site, o comprador clica em **"+ Adicionar outro ingresso ao pedido"** (até **10** por pedido), informa o nome e a categoria de cada pessoa e paga **tudo de uma vez** (taxa de R$ 3,00 por ingresso). Cada pessoa entra na lista com o próprio nome e código. Se o pedido for estornado, o estorno é do pedido inteiro; a troca de nome (transferência) continua individual. O limite é a constante `MAX_TICKETS_PER_ORDER` em `src/config/event.ts`.
+
 **CSV:** painel → "Baixar lista oficial (CSV)" (nome, categoria, código) ou "Baixar todas as compras (CSV)" (relatório financeiro). Abre direto no Excel/Numbers com acentos corretos.
 
 **Cópia de segurança do banco** (faça antes do evento e depois do evento):

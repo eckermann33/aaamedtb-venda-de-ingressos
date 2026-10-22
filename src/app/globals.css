@@ -2157,3 +2157,23 @@ table.data tr:hover td {
     display: table-header-group;
   }
 }
+
+/* Pedido com vários ingressos ------------------------------------------- */
+.extra-ticket {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.extra-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+.extra-row select.input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.add-ticket {
+  margin-bottom: 20px;
+}

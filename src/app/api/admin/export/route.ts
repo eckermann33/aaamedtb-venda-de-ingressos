@@ -16,6 +16,8 @@ const STATUS_LABEL: Record<string, string> = {
   failed: "Falhou",
 };
 
+const METHOD_LABEL: Record<string, string> = { pix: "Pix", card: "Cartão", manual: "Manual" };
+
 function money(cents: number) {
   return (cents / 100).toFixed(2).replace(".", ",");
 }
@@ -37,11 +39,11 @@ export async function GET(request: Request) {
   } else {
     const all = await allPurchases(sql);
     csv = toCsv(
-      ["Nome completo", "Celular/WhatsApp", "Categoria", "Valor total (R$)", "Taxa (R$)", "Forma", "Status da compra", "Status MP",
+      ["Nome completo", "Celular/WhatsApp", "Categoria", "Valor total (R$)", "Taxa (R$)", "Forma", "Origem", "Observação", "Status da compra", "Status MP",
        "ID pagamento MP", "Código interno", "Criada em", "Confirmada em", "Alerta"],
       all.map((r) => [
         r.full_name, r.buyer_phone ? formatPhone(r.buyer_phone) : "", r.category_label, money(r.amount_cents), money(r.fee_cents),
-        r.payment_method === "pix" ? "Pix" : "Cartão", STATUS_LABEL[r.status] ?? r.status, r.payment_status,
+        METHOD_LABEL[r.payment_method] ?? r.payment_method, r.source === "manual" ? "Manual" : "Site", r.note, STATUS_LABEL[r.status] ?? r.status, r.payment_status,
         r.mp_payment_id, r.ticket_code, formatDateTime(r.created_at), formatDateTime(r.confirmed_at), r.attention,
       ]),
     );

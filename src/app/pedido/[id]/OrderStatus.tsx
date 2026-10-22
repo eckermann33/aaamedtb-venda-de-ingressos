@@ -75,19 +75,32 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
 
   const summary = (
     <dl className="summary" style={{ textAlign: "left", marginTop: 8 }}>
-      <div>
-        <dt>Nome na lista</dt>
-        <dd>{p.fullName}</dd>
-      </div>
-      <div>
-        <dt>Ingresso</dt>
-        <dd>
-          {p.categoryLabel} · {formatBRL(p.ticketPriceCents)}
-        </dd>
-      </div>
+      {p.tickets.length > 1 ? (
+        p.tickets.map((t, i) => (
+          <div key={i}>
+            <dt>Ingresso {i + 1}</dt>
+            <dd>
+              {t.fullName} · {t.categoryLabel} · {formatBRL(t.ticketPriceCents)}
+            </dd>
+          </div>
+        ))
+      ) : (
+        <>
+          <div>
+            <dt>Nome na lista</dt>
+            <dd>{p.fullName}</dd>
+          </div>
+          <div>
+            <dt>Ingresso</dt>
+            <dd>
+              {p.categoryLabel} · {formatBRL(p.ticketPriceCents)}
+            </dd>
+          </div>
+        </>
+      )}
       {p.feeCents > 0 && (
         <div>
-          <dt>Taxa de serviço</dt>
+          <dt>Taxa de serviço{p.tickets.length > 1 ? ` (${p.tickets.length}×)` : ""}</dt>
           <dd>{formatBRL(p.feeCents)}</dd>
         </div>
       )}

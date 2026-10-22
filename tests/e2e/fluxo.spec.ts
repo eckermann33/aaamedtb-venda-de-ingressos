@@ -79,6 +79,85 @@ test("1/6/8/11. compra feminina por Pix no Checkout Pro: pendente, webhook repet
   expect(events.map((e) => e.result)).toEqual(["updated", "confirmed", "already_confirmed", "already_confirmed"]);
 });
 
+test("vários ingressos: 2 pessoas no mesmo pedido, um pagamento só, os dois nomes na lista", async ({ page }) => {
+  await fillStep1(page, "Aline Teixeira Mota", "Feminino", { keepOnForm: true });
+  // Ingresso extra para outra pessoa, de outra categoria.
+  await page.getByRole("button", { name: /Adicionar outro ingresso/ }).click();
+  await page.getByLabel("Nome completo do ingresso 2").fill("Rodrigo Pires Neto");
+  await page.getByLabel("Categoria do ingresso 2").selectOption("masculino");
+  await expect(page.getByRole("button", { name: /Continuar · 2 ingressos · R\$ 56,00/ })).toBeVisible();
+  await page.getByRole("button", { name: /Continuar/ }).click();
+
+  await expect(page.getByText("Confira seu pedido")).toBeVisible();
+  await expect(page.locator(".summary")).toContainText("Ingresso 1");
+  await expect(page.locator(".summary")).toContainText("Aline Teixeira Mota · Feminino · R$ 20,00");
+  await expect(page.locator(".summary")).toContainText("Rodrigo Pires Neto · Masculino · R$ 30,00");
+  await expect(page.locator(".summary")).toContainText("Taxa de serviço (2 × R$ 3,00)");
+  await expect(page.locator(".summary .total")).toContainText("R$ 56,00");
+  await page.getByRole("button", { name: "Pagar R$ 56,00 com Pix" }).click();
+
+  await expect(page.getByText("SIMULADOR LOCAL")).toBeVisible();
+  const pref = (await mockState()).preferences[0];
+  expect(pref.items.map((i: { quantity: number; unit_price: number }) => [i.quantity, i.unit_price])).toEqual([
+    [1, 20],
+    [1, 30],
+    [2, 3],
+  ]);
+  await page.locator("#pix-gerar").click();
+  await expect(page.getByRole("heading", { name: /Aguardando pagamento/ })).toBeVisible();
+  const [pay] = await db`SELECT mp_payment_id, amount_cents FROM payments`;
+  expect(pay.amount_cents).toBe(5600);
+  await mockPayment(pay.mp_payment_id, { status: "approved" });
+  await expect(page.getByRole("heading", { name: "Pagamento aprovado!" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".summary")).toContainText("Rodrigo Pires Neto");
+
+  const rows = await db`SELECT full_name, status, ticket_code FROM purchases ORDER BY full_name`;
+  expect(rows.map((r) => [r.full_name, r.status])).toEqual([
+    ["Aline Teixeira Mota", "confirmed"],
+    ["Rodrigo Pires Neto", "confirmed"],
+  ]);
+  expect(new Set(rows.map((r) => r.ticket_code)).size).toBe(2);
+});
+
+test("vários ingressos: valida nome do ingresso extra e limita a 10 por pedido", async ({ page }) => {
+  await fillStep1(page, "Aline Teixeira Mota", "Feminino", { keepOnForm: true });
+  await page.getByRole("button", { name: /Adicionar outro ingresso/ }).click();
+  await page.getByLabel("Nome completo do ingresso 2").fill("Fulano");
+  await page.getByRole("button", { name: /Continuar/ }).click();
+  await expect(page.getByText("Ingresso 2: Informe nome e sobrenome, como no documento.")).toBeVisible();
+  await page.getByLabel("Nome completo do ingresso 2").fill("aline  teixeira mota");
+  await page.getByRole("button", { name: /Continuar/ }).click();
+  await expect(page.getByText("Ingresso 2: este nome já está no pedido.")).toBeVisible();
+  await expect(page.getByText("Confira seu pedido")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Remover" }).click();
+  for (let i = 0; i < 9; i++) await page.getByRole("button", { name: /Adicionar outro ingresso/ }).click();
+  await expect(page.getByText("Limite de 10 ingressos por pedido.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Adicionar outro ingresso/ })).toHaveCount(0);
+});
+
+test("API recusa mais de 10 ingressos e pedido maior que as vagas restantes", async ({ request, baseURL }) => {
+  const [settings] = await db`SELECT current_terms_version_id AS t FROM settings`;
+  const mk = (n: number) => ({
+    clientRequestId: crypto.randomUUID(),
+    fullName: "Pessoa Principal Teste",
+    categoryId: "feminino",
+    extraTickets: Array.from({ length: n }, (_, i) => ({ fullName: `Pessoa Extra ${"abcdefghijkl"[i]}`, categoryId: "feminino" })),
+    adultConfirmed: true,
+    termsAccepted: true,
+    termsVersionId: settings.t,
+    paymentMethod: "pix",
+    buyerPhone: "42999998888",
+  });
+  const tooMany = await request.post("/api/purchases", { headers: { Origin: baseURL! }, data: mk(10) });
+  expect(tooMany.status()).toBe(400);
+  await db`UPDATE settings SET capacity = 2`;
+  const notEnough = await request.post("/api/purchases", { headers: { Origin: baseURL! }, data: mk(2) });
+  expect(notEnough.status()).toBe(409);
+  expect((await notEnough.json()).error.code).toBe("not_enough");
+  expect((await db`SELECT 1 FROM purchases`).length).toBe(0);
+});
+
 test("2/7. compra masculina por cartão: redireciona ao checkout e volta aprovado", async ({ page }) => {
   await fillStep1(page, "Carlos Henrique Prado", "Masculino");
   await page.getByRole("radio", { name: /Cartão/ }).check();
@@ -292,6 +371,69 @@ test.describe("painel administrativo", () => {
     await page.goto("/admin/lista");
     await expect(page.locator(".print-list tbody")).toContainText("Gabriela Nunes Torres");
     await expect(page.locator(".print-list tbody")).not.toContainText("Fernanda");
+  });
+
+  test("ingresso manual: organização lança nomes, entram na lista impressa e a remoção libera a vaga", async ({ page }) => {
+    await db`UPDATE settings SET capacity = 3`;
+    await loginAdmin(page);
+    await page.getByRole("link", { name: "Ingresso manual", exact: true }).first().click();
+    await expect(page.getByRole("heading", { name: "Ingresso manual", level: 1 })).toBeVisible();
+    await expect(page.getByText("Vagas livres agora: 3 de 3.")).toBeVisible();
+    page.on("dialog", (d) => d.accept());
+
+    await page.getByLabel("Categoria").selectOption("masculino");
+    await expect(page.getByLabel("Valor pago por ingresso (R$)")).toHaveValue("30,00");
+    await page.getByLabel("Nome completo de cada pessoa (um por linha)").fill("Marcos Vinicius Prado\nLuana Ribeiro Costa");
+    await page.getByLabel("Observação interna (opcional)").fill("Pix direto, vendido pelo Bruno");
+    const launch = page.getByRole("button", { name: /Lançar 2 ingresso/ });
+    await expect(launch).toBeDisabled(); // falta confirmar a maioridade/pagamento
+    await page.getByText("Confirmo que todas as pessoas acima têm 18 anos").click();
+    await launch.click();
+    await expect(page.getByText("2 ingresso(s) lançado(s) e já na lista oficial.")).toBeVisible();
+
+    const rows = await db`SELECT full_name, status, source, amount_cents, fee_cents, note, mp_payment_id FROM purchases ORDER BY full_name`;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ full_name: "Luana Ribeiro Costa", status: "confirmed", source: "manual", amount_cents: 3000, fee_cents: 0, mp_payment_id: null });
+    expect(rows[0].note).toBe("Pix direto, vendido pelo Bruno");
+    await expect(page.getByText("Vagas livres agora: 1 de 3.")).toBeVisible();
+
+    await page.goto("/admin/lista");
+    await expect(page.locator(".print-list tbody")).toContainText("Marcos Vinicius Prado");
+    await expect(page.locator(".print-list tbody")).toContainText("Luana Ribeiro Costa");
+
+    // Venda online enxerga as vagas ocupadas pelos manuais: sobra 1.
+    const resp = await page.request.get("/comprar");
+    expect(resp.status()).toBe(200);
+
+    await page.goto("/admin/manual");
+    await page.getByRole("row", { name: /Marcos Vinicius Prado/ }).getByRole("button", { name: "Remover" }).click();
+    await expect(page.getByText("Vagas livres agora: 2 de 3.")).toBeVisible();
+    await page.goto("/admin/lista");
+    await expect(page.locator(".print-list tbody")).not.toContainText("Marcos Vinicius Prado");
+
+    // Exportação marca a origem manual.
+    const csv = await page.request.get("/api/admin/export?scope=all");
+    const text = await csv.text();
+    expect(text).toContain("Manual");
+    expect(text).toContain("Pix direto, vendido pelo Bruno");
+  });
+
+  test("ingresso manual: exige login e recusa lotação estourada", async ({ page, request, baseURL }) => {
+    const anon = await request.post("/api/admin/manual", {
+      headers: { Origin: baseURL! },
+      data: { names: ["Fulano de Tal"], categoryId: "feminino", priceCents: null, phone: null, note: null, adultConfirmed: true },
+    });
+    expect(anon.status()).toBe(401);
+
+    await db`UPDATE settings SET capacity = 1`;
+    await loginAdmin(page);
+    await page.goto("/admin/manual");
+    page.on("dialog", (d) => d.accept());
+    await page.getByLabel("Nome completo de cada pessoa (um por linha)").fill("Ana Paula Ribeiro\nBia Souza Lima");
+    await page.getByText("Confirmo que todas as pessoas acima têm 18 anos").click();
+    await page.getByRole("button", { name: /Lançar 2 ingresso/ }).click();
+    await expect(page.getByText(/Restam apenas 1 vagas na lotação/)).toBeVisible();
+    expect((await db`SELECT 1 FROM purchases`).length).toBe(0);
   });
 
   test("fechar vendas pelo painel e bloqueio de abertura com pendências", async ({ page }) => {

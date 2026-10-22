@@ -40,13 +40,19 @@ export async function mockState() {
 }
 
 /** Preenche a etapa 1 do formulário de compra. */
-export async function fillStep1(page: Page, name: string, category: "Feminino" | "Masculino") {
+export async function fillStep1(
+  page: Page,
+  name: string,
+  category: "Feminino" | "Masculino",
+  opts: { keepOnForm?: boolean } = {},
+) {
   await page.goto("/comprar");
   await page.getByLabel("Nome completo").fill(name);
   await page.getByLabel("Celular / WhatsApp").fill("(42) 99999-8888");
   await page.locator("label.choice", { hasText: category }).click();
   await page.getByText("Confirmo que tenho 18 anos ou mais").click();
   await page.getByText("Li e aceito as regras de entrada").click();
+  if (opts.keepOnForm) return;
   await page.getByRole("button", { name: /Continuar/ }).click();
   await expect(page.getByText("Confira seu pedido")).toBeVisible();
 }

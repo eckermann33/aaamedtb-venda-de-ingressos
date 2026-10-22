@@ -7,8 +7,8 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Camada | Ferramenta | Resultado |
 | --- | --- | --- |
 | Tipos (TypeScript) | `npm run typecheck` | ✅ sem erros |
-| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 49/49 |
-| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 16/16 |
+| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 67/67 |
+| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 21/21 |
 | Build de produção | `npm run build` | ✅ |
 
 **Importante:** os testes de pagamento usam um **simulador local** do Mercado Pago (`tests/mock-mp/server.mjs`), que imita a API e envia webhooks assinados. O ambiente onde o projeto foi construído **não tem acesso à rede do Mercado Pago**, então **não houve teste contra o sandbox nem contra a produção do Mercado Pago**. Isso precisa ser feito antes de abrir as vendas (roteiro na seção 7 do README).
@@ -37,6 +37,21 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | 18 | Fechamento das vendas | Página mostra "Vendas fechadas"; API retorna 409; painel fecha/abre e impede abrir com pendências | ✅ |
 | 19 | Limite de lotação | 10 compras simultâneas com lotação 3 → exatamente 3 reservas; reserva vencida libera vaga; aprovação tardia acima da lotação não entra na lista | ✅ |
 | 20 | Dispositivos móveis | Todos os testes de navegador rodam em viewport de celular; sem rolagem horizontal; telas revisadas por captura (celular e desktop) | ✅ |
+
+## Vários ingressos por pedido e ingressos manuais
+
+| Cenário | Como foi verificado |
+| --- | --- |
+| Pedido de 3 ingressos (2 feminino + 1 masculino) com um único pagamento | Integração: itens do checkout (por categoria + taxa × 3), total R$ 79,00, todos confirmados com códigos diferentes |
+| Pagamento com valor de 1 ingresso para pedido de 3 | Integração: não confirma, alerta de valor divergente |
+| Estorno | Integração: devolve o pedido inteiro e tira todos da lista |
+| Lotação | Integração: pedido maior que as vagas restantes é recusado; reserva vencida libera todas as vagas; aprovação tardia acima da lotação exige estorno |
+| Clique duplo / mesma chave | Integração: 1 pedido com 3 linhas e 1 preferência no Mercado Pago; dados diferentes com a mesma chave são recusados |
+| Limites | Integração e API: máximo de 10 por pedido, nomes repetidos, nome ou categoria inválidos |
+| Telas | Navegador: adicionar/remover ingresso, mensagens por ingresso, resumo com taxa × quantidade, aprovação mostra todos os nomes |
+| Ingresso manual (painel) | Integração e navegador: vários nomes de uma vez, valor padrão/personalizado/cortesia, sem taxa, entra na lista impressa e no CSV, ocupa vaga, remoção libera vaga, exige login, recusa lotação estourada, banco impede forma de pagamento online em ingresso manual |
+
+**Não testado com o Mercado Pago real:** o checkout com `quantity` maior que 1 (taxa de serviço × N) segue o formato documentado da API de preferências, mas só foi exercitado no simulador local. Faça uma compra real de 2 ingressos antes de divulgar.
 
 ## Outros testes
 

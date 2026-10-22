@@ -7,6 +7,7 @@ import { useState } from "react";
 const LINKS = [
   { href: "/admin", label: "Resumo" },
   { href: "/admin/compras", label: "Compras" },
+  { href: "/admin/manual", label: "Ingresso manual" },
   { href: "/admin/lista", label: "Lista de entrada" },
   { href: "/admin/configuracoes", label: "Configurações" },
   { href: "/admin/auditoria", label: "Auditoria" },
@@ -214,5 +215,143 @@ export function PrintButton() {
     <button className="btn" onClick={() => window.print()}>
       Imprimir lista
     </button>
+  );
+}
+
+export type ManualCategory = { id: string; label: string; priceCents: number };
+
+const reais = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
+
+/** Lança ingressos pagos fora do site (WhatsApp, Pix direto, dinheiro) ou cortesias. */
+export function ManualTicketsForm({ categories }: { categories: ManualCategory[] }) {
+  const router = useRouter();
+  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
+  const [names, setNames] = useState("");
+  const [price, setPrice] = useState(categories[0] ? reais(categories[0].priceCents) : "");
+  const [phone, setPhone] = useState("");
+  const [note, setNote] = useState("");
+  const [adult, setAdult] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const list = names.split("\n").map((n) => n.trim()).filter(Boolean);
+  const cents = Math.round(Number(price.replace(/\./g, "").replace(",", ".").trim()) * 100);
+  const priceOk = Number.isFinite(cents) && cents >= 0;
+
+  return (
+    <form
+      className="form-grid"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!priceOk) return setMsg({ ok: false, text: "Valor inválido." });
+        const total = reais(cents * list.length);
+        if (!confirm(`Lançar ${list.length} ingresso(s) manual(is), ${reais(cents)} cada (total R$ ${total})? Eles entram na lista oficial agora.`)) return;
+        setBusy(true);
+        setMsg(null);
+        const r = await post("/api/admin/manual", {
+          names: list,
+          categoryId,
+          priceCents: cents,
+          phone: phone.trim() ? phone : null,
+          note: note.trim() ? note : null,
+          adultConfirmed: adult,
+        });
+        setBusy(false);
+        if (!r.ok) return setMsg({ ok: false, text: r.data?.error?.message ?? "Erro ao lançar." });
+        setMsg({ ok: true, text: `${r.data.count} ingresso(s) lançado(s) e já na lista oficial.` });
+        setNames("");
+        setNote("");
+        setPhone("");
+        setAdult(false);
+        router.refresh();
+      }}
+    >
+      <div className="field">
+        <label htmlFor="m-cat">Categoria</label>
+        <select
+          id="m-cat"
+          className="input"
+          value={categoryId}
+          onChange={(e) => {
+            setCategoryId(e.target.value);
+            const c = categories.find((x) => x.id === e.target.value);
+            if (c) setPrice(reais(c.priceCents));
+          }}
+        >
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label htmlFor="m-price">Valor pago por ingresso (R$)</label>
+        <input id="m-price" className="input" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+        <span className="hint">Já vem com o preço da categoria. Coloque 0 para cortesia/convidado. Sem taxa de serviço.</span>
+      </div>
+      <div className="field span-2">
+        <label htmlFor="m-names">Nome completo de cada pessoa (um por linha)</label>
+        <textarea
+          id="m-names"
+          className="input"
+          style={{ minHeight: 130 }}
+          value={names}
+          onChange={(e) => setNames(e.target.value)}
+          placeholder={"Maria Eduarda Souza\nJoão Pedro Lima"}
+        />
+        <span className="hint">{list.length} ingresso(s). Máximo 50 por vez.</span>
+      </div>
+      <div className="field">
+        <label htmlFor="m-phone">Celular / WhatsApp de quem comprou (opcional)</label>
+        <input id="m-phone" className="input" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(42) 99999-9999" />
+      </div>
+      <div className="field">
+        <label htmlFor="m-note">Observação interna (opcional)</label>
+        <input
+          id="m-note"
+          className="input"
+          maxLength={200}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Ex.: Pix direto, vendido pelo Fulano, cortesia"
+        />
+      </div>
+      <label className="checkbox span-2">
+        <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} />
+        <span>Confirmo que todas as pessoas acima têm 18 anos ou mais e que o pagamento já foi recebido (ou é cortesia).</span>
+      </label>
+      <div className="span-2">
+        <button className="btn" disabled={busy || list.length === 0 || !adult || !priceOk}>
+          {busy ? "Lançando…" : `Lançar ${list.length || ""} ingresso(s)`.replace("  ", " ")}
+        </button>
+        {msg && (
+          <p className={msg.ok ? "hint" : "field-error"} role={msg.ok ? "status" : "alert"} style={{ marginTop: 10 }}>
+            {msg.text}
+          </p>
+        )}
+      </div>
+    </form>
+  );
+}
+
+export function CancelManualButton({ purchaseId, name }: { purchaseId: string; name: string }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <span>
+      <button
+        className="btn btn-danger btn-sm"
+        onClick={async () => {
+          if (!confirm(`Remover o ingresso manual de "${name}" da lista? A vaga é liberada.`)) return;
+          const r = await post(`/api/admin/purchases/${purchaseId}/cancel`);
+          if (!r.ok) setError(r.data?.error?.message ?? "Falha ao remover.");
+          router.refresh();
+        }}
+      >
+        Remover
+      </button>
+      {error && <span className="field-error"> {error}</span>}
+    </span>
   );
 }

@@ -101,6 +101,9 @@ export const DEFAULT_CAPACITY = 500;
 /** Taxa de serviço por ingresso (em centavos). Alterável no painel. */
 export const DEFAULT_SERVICE_FEE_CENTS = 300;
 
+/** Máximo de ingressos (pessoas) em um único pedido. */
+export const MAX_TICKETS_PER_ORDER = 10;
+
 /** Tempo que o comprador tem para pagar (o checkout do Mercado Pago expira junto). */
 export const PAYMENT_WINDOW_MINUTES = 30;
 
