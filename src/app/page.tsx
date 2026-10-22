@@ -235,7 +235,7 @@ export default async function EventPage() {
                 <ul className="rules">
                   {s.terms.rules.map((r) => (
                     <li key={r}>
-                      {/proib|não será permitid/i.test(r) ? <IconBan size={18} /> : <IconCheck size={18} />}
+                      {/proib|não será permitid|descumpr/i.test(r) ? <IconBan size={18} /> : <IconCheck size={18} />}
                       <span>{r}</span>
                     </li>
                   ))}

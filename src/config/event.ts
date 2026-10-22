@@ -75,6 +75,7 @@ export const DEFAULT_TERMS: TermsContent = {
     "Não será permitida a entrada de objetos ou substâncias proibidos pela legislação ou pelas regras de segurança do evento.",
     "O camarote será vendido separadamente na entrada da festa, conforme disponibilidade.",
     "A compra do ingresso comum não garante acesso ao camarote.",
+    "O descumprimento das regras acima poderá gerar cobrança adicional na entrada da festa.",
   ],
   refundPolicy:
     "Depois que o pagamento é aprovado, a compra não pode ser cancelada pelo comprador e o valor não é reembolsado, ressalvados os direitos previstos no Código de Defesa do Consumidor.",
