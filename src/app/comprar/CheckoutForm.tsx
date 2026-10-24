@@ -21,7 +21,9 @@ type Props = {
   maxTickets: number;
 };
 
-type Extra = { key: string; name: string; categoryId: string };
+type Extra = { key: string; name: string; categoryId: string; camarote: boolean };
+
+const CAMAROTE = "camarote";
 
 /** Chave para detectar nomes repetidos no mesmo pedido (sem acento e sem maiúsculas). */
 function searchKey(raw: string): string {
@@ -51,6 +53,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
   );
   // Ingressos adicionais do mesmo pedido (cada um com o nome de quem vai entrar).
   const [extras, setExtras] = useState<Extra[]>([]);
+  const [camarote, setCamarote] = useState(false);
   const [adult, setAdult] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [method, setMethod] = useState<"pix" | "card">("pix");
@@ -61,20 +64,33 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
   const requestId = useRef<string | null>(null);
 
   const category = categories.find((c) => c.id === categoryId) ?? null;
+  const camaroteCategory = categories.find((c) => c.id === CAMAROTE) ?? null;
   const lines = useMemo(() => {
-    const out: { name: string; category: Category | null }[] = [{ name, category }];
-    for (const x of extras) out.push({ name: x.name, category: categories.find((c) => c.id === x.categoryId) ?? null });
+    const line = (n: string, c: Category | null, withCamarote: boolean) => {
+      const addon = withCamarote && c && c.id !== CAMAROTE ? camaroteCategory : null;
+      return { name: n, category: c, addon, price: (c?.priceCents ?? 0) + (addon?.priceCents ?? 0) };
+    };
+    const out = [line(name, category, camarote)];
+    for (const x of extras) out.push(line(x.name, categories.find((c) => c.id === x.categoryId) ?? null, x.camarote));
     return out;
-  }, [name, category, extras, categories]);
+  }, [name, category, camarote, extras, categories, camaroteCategory]);
   const count = lines.length;
-  const ticketsTotal = lines.reduce((n, l) => n + (l.category?.priceCents ?? 0), 0);
+  const ticketsTotal = lines.reduce((n, l) => n + l.price, 0);
   const total = category ? ticketsTotal + feeCents * count : 0;
 
   const addExtra = () =>
     setExtras((list) =>
       list.length + 1 >= maxTickets
         ? list
-        : [...list, { key: crypto.randomUUID(), name: "", categoryId: categoryId || (categories[0]?.id ?? "") }],
+        : [
+            ...list,
+            {
+              key: crypto.randomUUID(),
+              name: "",
+              categoryId: categoryId && categoryId !== CAMAROTE ? categoryId : (categories.find((c) => c.id !== CAMAROTE)?.id ?? ""),
+              camarote: false,
+            },
+          ],
     );
   const updateExtra = (key: string, patch: Partial<Extra>) =>
     setExtras((list) => list.map((x) => (x.key === key ? { ...x, ...patch } : x)));
@@ -124,7 +140,12 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           clientRequestId: requestId.current,
           fullName: name,
           categoryId,
-          extraTickets: extras.map((x) => ({ fullName: x.name, categoryId: x.categoryId })),
+          camarote: categoryId !== CAMAROTE && camarote,
+          extraTickets: extras.map((x) => ({
+            fullName: x.name,
+            categoryId: x.categoryId,
+            camarote: x.categoryId !== CAMAROTE && x.camarote,
+          })),
           adultConfirmed: adult,
           termsAccepted: accepted,
           termsVersionId,
@@ -233,8 +254,9 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
                     onChange={() => setCategoryId(c.id)}
                   />
                   <span className="choice-body">
-                    <span className="choice-title">{c.label}</span>
+                    <span className="choice-title">{c.id === CAMAROTE ? "Só o camarote" : c.label}</span>
                     <span className="choice-price">{formatBRL(c.priceCents)}</span>
+                    {c.id === CAMAROTE && <span className="choice-sub">para quem já comprou o ingresso</span>}
                     {feeCents > 0 && <span className="choice-sub">+ {formatBRL(feeCents)} de taxa</span>}
                   </span>
                   <span className="choice-check" aria-hidden>
@@ -249,6 +271,15 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
               </span>
             )}
           </fieldset>
+
+          {camaroteCategory && categoryId && categoryId !== CAMAROTE && (
+            <label className="checkbox">
+              <input type="checkbox" checked={camarote} onChange={(e) => setCamarote(e.target.checked)} />
+              <span>
+                Quero <strong>camarote</strong> junto com o meu ingresso (+ {formatBRL(camaroteCategory.priceCents)})
+              </span>
+            </label>
+          )}
 
           {extras.map((x, i) => (
             <div className="field extra-ticket" key={x.key}>
@@ -273,7 +304,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
                 >
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.label} · {formatBRL(c.priceCents)}
+                      {c.id === CAMAROTE ? "Só o camarote (já tem ingresso)" : c.label} · {formatBRL(c.priceCents)}
                       {feeCents > 0 ? ` + ${formatBRL(feeCents)} de taxa` : ""}
                     </option>
                   ))}
@@ -282,6 +313,16 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
                   Remover
                 </button>
               </div>
+                {camaroteCategory && x.categoryId !== CAMAROTE && (
+                  <label className="checkbox" style={{ marginTop: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={x.camarote}
+                      onChange={(e) => updateExtra(x.key, { camarote: e.target.checked })}
+                    />
+                    <span>Camarote junto (+ {formatBRL(camaroteCategory.priceCents)})</span>
+                  </label>
+                )}
               {errors[`extra${i}`] && (
                 <span className="field-error" id={`e-extra${i}`} role="alert">
                   {errors[`extra${i}`]}
@@ -374,7 +415,8 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
                   {count > 1 && l.category && (
                     <>
                       {" "}
-                      · {l.category.label} · {formatBRL(l.category.priceCents)}
+                      · {l.category.id === CAMAROTE ? "Só camarote" : l.category.label}
+                      {l.addon && " + Camarote"} · {formatBRL(l.price)}
                     </>
                   )}
                 </dd>
@@ -387,7 +429,10 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
             {count === 1 && (
               <div>
                 <dt>Categoria</dt>
-                <dd>{category.label}</dd>
+                <dd>
+                  {category.id === CAMAROTE ? "Só o camarote" : category.label}
+                  {lines[0].addon && " + Camarote"}
+                </dd>
               </div>
             )}
             <div>

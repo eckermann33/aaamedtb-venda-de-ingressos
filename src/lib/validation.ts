@@ -34,12 +34,18 @@ export const purchaseRequestSchema = z.object({
   clientRequestId: z.uuid(),
   fullName: z.string().max(200),
   categoryId: z.string().regex(/^[a-z0-9-]{2,32}$/),
+  // Adicional: camarote junto com o ingresso (valor da categoria "camarote" somado).
+  camarote: z.boolean().optional(),
   adultConfirmed: z.literal(true),
   termsAccepted: z.literal(true),
   termsVersionId: z.number().int().positive(),
   // Ingressos adicionais do mesmo pedido (o titular acima é o primeiro ingresso). Máximo 10 no total.
   extraTickets: z
-    .array(z.object({ fullName: z.string().max(200), categoryId: z.string().regex(/^[a-z0-9-]{2,32}$/) }))
+    .array(z.object({
+        fullName: z.string().max(200),
+        categoryId: z.string().regex(/^[a-z0-9-]{2,32}$/),
+        camarote: z.boolean().optional(),
+      }))
     .max(9)
     .optional(),
   paymentMethod: z.enum(["pix", "card"]),

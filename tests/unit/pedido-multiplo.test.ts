@@ -277,3 +277,76 @@ describe("ingressos manuais", () => {
     await expect(sql()`UPDATE purchases SET payment_method = 'pix' WHERE id = ${m.id}`).rejects.toThrow();
   });
 });
+
+describe("camarote como adicional", () => {
+  const withCamarote = async () => {
+    await sql()`
+      INSERT INTO ticket_categories (id, label, price_cents, active, sort_order)
+      VALUES ('camarote', 'Camarote', 3000, true, 3)
+      ON CONFLICT (id) DO UPDATE SET active = true, price_cents = 3000
+    `;
+  };
+
+  it("adicional soma o valor ao ingresso, vira item do checkout e conta no painel", async () => {
+    await withCamarote();
+    const lead = await createPurchase(deps(mp), request(terms, { camarote: true }));
+    expect(lead.camarote).toBe(true);
+    expect(lead.category_id).toBe("feminino");
+    expect(lead.category_label).toBe("Feminino + Camarote");
+    expect(lead.ticket_price_cents).toBe(5000);
+    expect(lead.amount_cents).toBe(5300);
+    expect(mp.prefCalls[0].items).toEqual([
+      expect.objectContaining({ id: "feminino", quantity: 1, unitPriceCents: 2000 }),
+      expect.objectContaining({ id: "camarote", quantity: 1, unitPriceCents: 3000 }),
+      expect.objectContaining({ id: "taxa-servico", quantity: 1, unitPriceCents: 300 }),
+    ]);
+    const total = mp.prefCalls[0].items.reduce((n, i) => n + i.quantity * i.unitPriceCents, 0);
+    expect(total).toBe(5300);
+    await applyPayment(sql(), mp.pay({ id: lead.id, amount_cents: 5300, payment_method: "pix" }, "approved"));
+    expect((await getStats(sql())).camarotes).toBe(1);
+    expect((await officialList(sql()))[0].category_label).toBe("Feminino + Camarote");
+  });
+
+  it("pedido misto: um com adicional, um sem e um só de camarote (quem já tem ingresso)", async () => {
+    await withCamarote();
+    const lead = await createPurchase(
+      deps(mp),
+      request(terms, {
+        camarote: true,
+        extraTickets: [
+          { fullName: "Ana Clara Lima", categoryId: "masculino" },
+          { fullName: "João Pedro Alves", categoryId: "camarote" },
+        ],
+      }),
+    );
+    const tickets = await getOrderTickets(sql(), lead.id);
+    const byName = Object.fromEntries(tickets.map((t) => [t.full_name, t]));
+    expect(byName["Maria Eduarda Souza"].amount_cents).toBe(5300);
+    expect(byName["Ana Clara Lima"].amount_cents).toBe(3300);
+    expect(byName["João Pedro Alves"].amount_cents).toBe(3300);
+    expect(byName["João Pedro Alves"].camarote).toBe(true);
+    expect(mp.prefCalls[0].items).toEqual([
+      expect.objectContaining({ id: "feminino", quantity: 1, unitPriceCents: 2000 }),
+      expect.objectContaining({ id: "camarote", quantity: 2, unitPriceCents: 3000 }),
+      expect.objectContaining({ id: "masculino", quantity: 1, unitPriceCents: 3000 }),
+      expect.objectContaining({ id: "taxa-servico", quantity: 3, unitPriceCents: 300 }),
+    ]);
+    await applyPayment(sql(), mp.pay({ id: lead.id, amount_cents: 11900, payment_method: "pix" }, "approved"));
+    expect((await getStats(sql())).camarotes).toBe(2);
+  });
+
+  it("sem a categoria camarote ativa, o adicional é recusado", async () => {
+    await sql()`DELETE FROM ticket_categories WHERE id = 'camarote'`;
+    await expectError(createPurchase(deps(mp), request(terms, { camarote: true })), "invalid_category");
+    await withCamarote();
+    await sql()`UPDATE ticket_categories SET active = false WHERE id = 'camarote'`;
+    await expectError(createPurchase(deps(mp), request(terms, { camarote: true })), "invalid_category");
+  });
+
+  it("preço do camarote vem do banco, não do navegador", async () => {
+    await withCamarote();
+    await sql()`UPDATE ticket_categories SET price_cents = 4000 WHERE id = 'camarote'`;
+    const lead = await createPurchase(deps(mp), request(terms, { camarote: true, ...({ camarotePriceCents: 1 } as object) }));
+    expect(lead.amount_cents).toBe(2000 + 4000 + 300);
+  });
+});

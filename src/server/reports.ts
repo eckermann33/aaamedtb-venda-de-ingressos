@@ -3,6 +3,7 @@ import type { Sql } from "./db";
 
 export type Stats = {
   confirmed: number;
+  camarotes: number;
   manualConfirmed: number;
   manualRevenueCents: number;
   byCategory: { categoryId: string; label: string; confirmed: number; revenueCents: number }[];
@@ -25,6 +26,7 @@ export async function getStats(sql: Sql): Promise<Stats> {
   const [totals] = await sql<
     {
       confirmed: number;
+      camarotes: number;
       manual_confirmed: number;
       manual_revenue: number;
       gross: number;
@@ -39,6 +41,7 @@ export async function getStats(sql: Sql): Promise<Stats> {
   >`
     SELECT
       count(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
+      count(*) FILTER (WHERE status = 'confirmed' AND camarote)::int AS camarotes,
       count(*) FILTER (WHERE status = 'confirmed' AND source = 'manual')::int AS manual_confirmed,
       coalesce(sum(amount_cents) FILTER (WHERE status = 'confirmed' AND source = 'manual'), 0)::int AS manual_revenue,
       coalesce(sum(amount_cents) FILTER (WHERE status = 'confirmed'), 0)::int AS gross,
@@ -71,6 +74,7 @@ export async function getStats(sql: Sql): Promise<Stats> {
   const capacity = cfg?.capacity ?? null;
   return {
     confirmed: totals.confirmed,
+    camarotes: totals.camarotes,
     manualConfirmed: totals.manual_confirmed,
     manualRevenueCents: totals.manual_revenue,
     byCategory: byCategory.map((r) => ({

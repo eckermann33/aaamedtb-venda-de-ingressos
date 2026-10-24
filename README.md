@@ -297,6 +297,8 @@ Depois, troque `MP_ACCESS_TOKEN` (e o webhook/assinatura, se diferente) para **p
 
 **Vários ingressos por compra:** no site, o comprador clica em **"+ Adicionar outro ingresso ao pedido"** (até **10** por pedido), informa o nome e a categoria de cada pessoa e paga **tudo de uma vez** (taxa de R$ 3,00 por ingresso). Cada pessoa entra na lista com o próprio nome e código. Se o pedido for estornado, o estorno é do pedido inteiro; a troca de nome (transferência) continua individual. O limite é a constante `MAX_TICKETS_PER_ORDER` em `src/config/event.ts`.
 
+**Camarote:** crie no painel (Configurações → categorias) a categoria com identificador `camarote` e o valor do camarote. Ela **não vira um card de ingresso**: no site aparece como o adicional "Quero camarote junto com o meu ingresso (+ valor)" (por ingresso do pedido) e como a opção "Só o camarote" para quem já comprou o ingresso. O rótulo na lista fica "Feminino + Camarote". O painel mostra quantos têm camarote. Para desligar a venda online do camarote, desmarque "ativa" da categoria.
+
 **CSV:** painel → "Baixar lista oficial (CSV)" (nome, categoria, código) ou "Baixar todas as compras (CSV)" (relatório financeiro). Abre direto no Excel/Numbers com acentos corretos.
 
 **Cópia de segurança do banco** (faça antes do evento e depois do evento):

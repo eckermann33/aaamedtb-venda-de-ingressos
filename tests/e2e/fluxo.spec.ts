@@ -158,6 +158,31 @@ test("API recusa mais de 10 ingressos e pedido maior que as vagas restantes", as
   expect((await db`SELECT 1 FROM purchases`).length).toBe(0);
 });
 
+test("camarote como adicional: marcar na compra soma R$ 30 e só-camarote aparece como opção", async ({ page }) => {
+  await db`INSERT INTO ticket_categories (id, label, price_cents, active, sort_order)
+           VALUES ('camarote', 'Camarote', 3000, true, 3)
+           ON CONFLICT (id) DO UPDATE SET active = true, price_cents = 3000`;
+  try {
+    await page.goto("/");
+    await expect(page.getByText(/O camarote é um adicional de R\$\s30,00/)).toBeVisible();
+    await expect(page.locator("article.ticket")).toHaveCount(2); // camarote não vira card de ingresso
+
+    await fillStep1(page, "Helena Duarte Campos", "Feminino", { keepOnForm: true });
+    await expect(page.getByText("Só o camarote")).toBeVisible();
+    await page.getByText(/Quero camarote junto com o meu ingresso/).click();
+    await expect(page.getByRole("button", { name: /Continuar · R\$ 53,00/ })).toBeVisible();
+    await page.getByRole("button", { name: /Continuar/ }).click();
+    await expect(page.locator(".summary")).toContainText("Feminino + Camarote");
+    await expect(page.locator(".summary .total")).toContainText("R$ 53,00");
+    await page.getByRole("button", { name: "Pagar R$ 53,00 com Pix" }).click();
+    await expect(page.getByText("SIMULADOR LOCAL")).toBeVisible();
+    const [row] = await db`SELECT amount_cents, camarote, category_label FROM purchases`;
+    expect(row).toMatchObject({ amount_cents: 5300, camarote: true, category_label: "Feminino + Camarote" });
+  } finally {
+    await db`DELETE FROM ticket_categories WHERE id = 'camarote'`;
+  }
+});
+
 test("2/7. compra masculina por cartão: redireciona ao checkout e volta aprovado", async ({ page }) => {
   await fillStep1(page, "Carlos Henrique Prado", "Masculino");
   await page.getByRole("radio", { name: /Cartão/ }).check();

@@ -19,6 +19,7 @@ export type PurchaseRow = {
   ticket_price_cents: number;
   fee_cents: number;
   amount_cents: number;
+  camarote: boolean;
   payment_method: "pix" | "card" | "manual";
   lead_id: string | null;
   source: "online" | "manual";
@@ -88,7 +89,10 @@ export type CreateDeps = {
   envState: { mpAccessToken: boolean; mpWebhookSecret: boolean };
 };
 
-export type TicketHolder = { fullName: string; categoryId: string };
+export type TicketHolder = { fullName: string; categoryId: string; camarote?: boolean };
+
+/** Id da categoria que define o preço do camarote (adicional ou ingresso só de camarote). */
+export const CAMAROTE_CATEGORY = "camarote";
 
 /**
  * Cria o pedido pendente (com reserva de vagas) e inicia o pagamento no Mercado Pago.
@@ -99,7 +103,7 @@ export type TicketHolder = { fullName: string; categoryId: string };
 export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): Promise<PurchaseRow> {
   const { sql, mp } = deps;
   const holders: TicketHolder[] = [
-    { fullName: input.fullName, categoryId: input.categoryId },
+    { fullName: input.fullName, categoryId: input.categoryId, camarote: input.camarote },
     ...(input.extraTickets ?? []),
   ];
   if (holders.length > MAX_TICKETS_PER_ORDER) {
@@ -115,7 +119,11 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
   if (!buyerPhone) {
     throw new PurchaseError("invalid_phone", "Informe um celular/WhatsApp com DDD, só com números.", 400);
   }
-  const tickets = holders.map((h) => ({ fullName: cleanName(h.fullName), categoryId: h.categoryId }));
+  const tickets = holders.map((h) => ({
+    fullName: cleanName(h.fullName),
+    categoryId: h.categoryId,
+    camarote: h.categoryId === CAMAROTE_CATEGORY ? true : !!h.camarote,
+  }));
   const searchKeys = tickets.map((t) => searchableName(t.fullName));
   if (new Set(searchKeys).size !== searchKeys.length) {
     throw new PurchaseError("duplicate_name", "Há nomes repetidos no pedido. Cada ingresso precisa de uma pessoa diferente.", 400);
@@ -143,10 +151,22 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
         409,
       );
     }
+    const camaroteCategory = settings.categories.find((c) => c.id === CAMAROTE_CATEGORY && c.active) ?? null;
     const priced = tickets.map((t) => {
       const category = settings.categories.find((c) => c.id === t.categoryId && c.active);
       if (!category) throw new PurchaseError("invalid_category", "Categoria de ingresso inválida.", 400);
-      return { ...t, category };
+      // Adicional de camarote: soma o valor da categoria "camarote" ao ingresso escolhido.
+      const addon = t.camarote && category.id !== CAMAROTE_CATEGORY ? camaroteCategory : null;
+      if (t.camarote && category.id !== CAMAROTE_CATEGORY && !addon) {
+        throw new PurchaseError("invalid_category", "O camarote não está disponível no momento.", 400);
+      }
+      return {
+        ...t,
+        category,
+        addon,
+        priceCents: category.priceCents + (addon?.priceCents ?? 0),
+        label: addon ? `${category.label} + Camarote` : category.label,
+      };
     });
 
     if (settings.capacity !== null) {
@@ -166,11 +186,11 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
 
     const insert = (t: (typeof priced)[number], clientRequestId: string, leadId: string | null) => tx<PurchaseRow[]>`
       INSERT INTO purchases (
-        client_request_id, lead_id, full_name, name_search, buyer_phone, category_id, category_label,
+        client_request_id, lead_id, full_name, name_search, buyer_phone, category_id, category_label, camarote,
         ticket_price_cents, fee_cents, amount_cents, payment_method, adult_confirmed, terms_version_id, terms_accepted_at, expires_at
       ) VALUES (
-        ${clientRequestId}, ${leadId}, ${t.fullName}, ${searchableName(t.fullName)}, ${buyerPhone}, ${t.category.id}, ${t.category.label},
-        ${t.category.priceCents}, ${settings.serviceFeeCents}, ${t.category.priceCents + settings.serviceFeeCents},
+        ${clientRequestId}, ${leadId}, ${t.fullName}, ${searchableName(t.fullName)}, ${buyerPhone}, ${t.category.id}, ${t.label}, ${t.camarote},
+        ${t.priceCents}, ${settings.serviceFeeCents}, ${t.priceCents + settings.serviceFeeCents},
         ${input.paymentMethod}, true, ${settings.termsVersionId}, now(),
         now() + ${reservationMs / 1000} * interval '1 second'
       )
@@ -203,6 +223,18 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
         quantity: 1,
         unitPriceCents: t.category.priceCents,
       });
+    }
+    if (t.addon) {
+      const extra = byCategory.get(t.addon.id);
+      if (extra) extra.quantity += 1;
+      else {
+        byCategory.set(t.addon.id, {
+          id: t.addon.id,
+          title: `Camarote ${created.eventName}`,
+          quantity: 1,
+          unitPriceCents: t.addon.priceCents,
+        });
+      }
     }
   }
   const items = [...byCategory.values()];
@@ -243,13 +275,13 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
 async function sameRequestOrThrow(
   sql: Sql,
   existing: PurchaseRow,
-  tickets: { fullName: string; categoryId: string }[],
+  tickets: { fullName: string; categoryId: string; camarote: boolean }[],
   input: PurchaseRequest,
 ): Promise<PurchaseRow> {
   const group = await getOrderTickets(sql, existing.id);
-  const key = (name: string, category: string) => `${category}|${name}`;
-  const sent = tickets.map((t) => key(t.fullName, t.categoryId)).sort();
-  const saved = group.map((g) => key(g.full_name, g.category_id)).sort();
+  const key = (name: string, category: string, camarote: boolean) => `${category}|${camarote}|${name}`;
+  const sent = tickets.map((t) => key(t.fullName, t.categoryId, t.camarote)).sort();
+  const saved = group.map((g) => key(g.full_name, g.category_id, g.camarote)).sort();
   const same =
     existing.lead_id === null &&
     existing.payment_method === input.paymentMethod &&
