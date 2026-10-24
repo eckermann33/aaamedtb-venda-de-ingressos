@@ -13,6 +13,8 @@ const schema = z.object({
   priceCents: z.number().int().min(0).max(100_000).nullable(),
   phone: z.string().max(30).nullable(),
   note: z.string().max(200).nullable(),
+  // Cortesia da diretoria da Atlética: vai para a seção "Atlética" da lista.
+  athletic: z.boolean().optional(),
   adultConfirmed: z.literal(true),
 });
 

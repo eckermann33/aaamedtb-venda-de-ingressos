@@ -230,6 +230,7 @@ export function ManualTicketsForm({ categories }: { categories: ManualCategory[]
   const [price, setPrice] = useState(categories[0] ? reais(categories[0].priceCents) : "");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  const [athletic, setAthletic] = useState(false);
   const [adult, setAdult] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -254,6 +255,7 @@ export function ManualTicketsForm({ categories }: { categories: ManualCategory[]
           priceCents: cents,
           phone: phone.trim() ? phone : null,
           note: note.trim() ? note : null,
+          athletic,
           adultConfirmed: adult,
         });
         setBusy(false);
@@ -263,6 +265,7 @@ export function ManualTicketsForm({ categories }: { categories: ManualCategory[]
         setNote("");
         setPhone("");
         setAdult(false);
+        setAthletic(false);
         router.refresh();
       }}
     >
@@ -317,6 +320,12 @@ export function ManualTicketsForm({ categories }: { categories: ManualCategory[]
           placeholder="Ex.: Pix direto, vendido pelo Fulano, cortesia"
         />
       </div>
+      <label className="checkbox span-2">
+        <input type="checkbox" checked={athletic} onChange={(e) => setAthletic(e.target.checked)} />
+        <span>
+          <strong>Atlética</strong> (diretoria): aparece na seção separada da lista de entrada
+        </span>
+      </label>
       <label className="checkbox span-2">
         <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} />
         <span>Confirmo que todas as pessoas acima têm 18 anos ou mais e que o pagamento já foi recebido (ou é cortesia).</span>
@@ -428,5 +437,36 @@ export function CamaroteForm({
       </button>
       {msg && <p className={msg.ok ? "hint" : "field-error"}>{msg.text}</p>}
     </form>
+  );
+}
+
+/** Marca o ingresso como da diretoria da Atlética (seção separada na lista de entrada). */
+export function AthleticToggle({ purchaseId, athletic }: { purchaseId: string; athletic: boolean }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div>
+      <p className="hint">
+        {athletic
+          ? "Este ingresso está na seção Atlética (diretoria) da lista de entrada."
+          : "Marque se for cortesia da diretoria: o nome vai para a seção Atlética, separada da lista geral."}
+      </p>
+      <button
+        className={athletic ? "btn btn-ghost btn-sm" : "btn btn-sm"}
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError(null);
+          const r = await post(`/api/admin/purchases/${purchaseId}/atletica`, { athletic: !athletic });
+          setBusy(false);
+          if (!r.ok) setError(r.data?.error?.message ?? "Erro.");
+          router.refresh();
+        }}
+      >
+        {athletic ? "Tirar da Atlética" : "Marcar como Atlética"}
+      </button>
+      {error && <p className="field-error">{error}</p>}
+    </div>
   );
 }

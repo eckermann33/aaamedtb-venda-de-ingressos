@@ -4,6 +4,7 @@ import type { Sql } from "./db";
 export type Stats = {
   confirmed: number;
   camarotes: number;
+  athletic: number;
   camaroteExtraCents: number;
   manualConfirmed: number;
   manualRevenueCents: number;
@@ -28,6 +29,7 @@ export async function getStats(sql: Sql): Promise<Stats> {
     {
       confirmed: number;
       camarotes: number;
+      athletic: number;
       camarote_extra: number;
       manual_confirmed: number;
       manual_revenue: number;
@@ -44,6 +46,7 @@ export async function getStats(sql: Sql): Promise<Stats> {
     SELECT
       count(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
       count(*) FILTER (WHERE status = 'confirmed' AND camarote)::int AS camarotes,
+      count(*) FILTER (WHERE status = 'confirmed' AND athletic)::int AS athletic,
       coalesce(sum(camarote_extra_cents) FILTER (WHERE status = 'confirmed'), 0)::int AS camarote_extra,
       count(*) FILTER (WHERE status = 'confirmed' AND source = 'manual')::int AS manual_confirmed,
       coalesce(sum(amount_cents) FILTER (WHERE status = 'confirmed' AND source = 'manual'), 0)::int AS manual_revenue,
@@ -78,6 +81,7 @@ export async function getStats(sql: Sql): Promise<Stats> {
   return {
     confirmed: totals.confirmed,
     camarotes: totals.camarotes,
+    athletic: totals.athletic,
     camaroteExtraCents: totals.camarote_extra,
     manualConfirmed: totals.manual_confirmed,
     manualRevenueCents: totals.manual_revenue,
@@ -134,6 +138,7 @@ export type ListRow = {
   fee_cents: number;
   payment_method: string;
   source: string;
+  athletic: boolean;
   camarote_extra_cents: number | null;
   note: string | null;
   lead_id: string | null;
@@ -177,7 +182,7 @@ export async function listPurchases(sql: Sql, f: ListFilters): Promise<{ rows: L
 
   const [{ total }] = await sql<{ total: number }[]>`SELECT count(*)::int AS total FROM purchases ${where}`;
   const rows = await sql<ListRow[]>`
-    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, camarote_extra_cents, note, lead_id,
+    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, athletic, camarote_extra_cents, note, lead_id,
            status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at
     FROM purchases ${where}
     ORDER BY ${order}
@@ -188,6 +193,7 @@ export async function listPurchases(sql: Sql, f: ListFilters): Promise<{ rows: L
 
 export type OfficialRow = {
   full_name: string;
+  athletic: boolean;
   category_label: string;
   amount_cents: number;
   ticket_code: string;
@@ -197,17 +203,17 @@ export type OfficialRow = {
 /** Lista oficial de entrada: somente compras com pagamento aprovado e confirmado. */
 export async function officialList(sql: Sql): Promise<OfficialRow[]> {
   return sql<OfficialRow[]>`
-    SELECT full_name, category_label, amount_cents, ticket_code, confirmed_at
+    SELECT full_name, athletic, category_label, amount_cents, ticket_code, confirmed_at
     FROM purchases
     WHERE status = 'confirmed'
-    ORDER BY name_search ASC, confirmed_at ASC
+    ORDER BY athletic ASC, name_search ASC, confirmed_at ASC
   `;
 }
 
 /** Todas as compras (relatório financeiro), da mais antiga para a mais recente. */
 export async function allPurchases(sql: Sql): Promise<ListRow[]> {
   return sql<ListRow[]>`
-    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, camarote_extra_cents, note, lead_id,
+    SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, athletic, camarote_extra_cents, note, lead_id,
            status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at
     FROM purchases
     ORDER BY created_at ASC, full_name ASC

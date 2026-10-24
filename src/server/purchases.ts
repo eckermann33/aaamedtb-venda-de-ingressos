@@ -20,6 +20,7 @@ export type PurchaseRow = {
   fee_cents: number;
   amount_cents: number;
   camarote: boolean;
+  athletic: boolean;
   camarote_extra_cents: number | null;
   payment_method: "pix" | "card" | "manual";
   lead_id: string | null;
@@ -725,6 +726,8 @@ export type ManualTicketsInput = {
   phone: string | null;
   /** Observação interna: forma de pagamento, quem vendeu, convidado de quem... */
   note: string | null;
+  /** Cortesia da diretoria da Atlética: vai para a seção "Atlética" da lista de entrada. */
+  athletic?: boolean;
 };
 
 /**
@@ -770,11 +773,11 @@ export async function createManualTickets(sql: Sql, input: ManualTicketsInput): 
       const [row] = await tx<PurchaseRow[]>`
         INSERT INTO purchases (
           client_request_id, full_name, name_search, buyer_phone, category_id, category_label,
-          ticket_price_cents, fee_cents, amount_cents, payment_method, source, note, status,
+          ticket_price_cents, fee_cents, amount_cents, payment_method, source, note, athletic, status,
           adult_confirmed, terms_version_id, terms_accepted_at, ticket_code, expires_at, confirmed_at
         ) VALUES (
           ${randomUUID()}, ${name}, ${searchableName(name)}, ${phone}, ${category.id}, ${category.label},
-          ${price}, 0, ${price}, 'manual', 'manual', ${note}, 'confirmed',
+          ${price}, 0, ${price}, 'manual', 'manual', ${note}, ${input.athletic === true}, 'confirmed',
           true, ${settings.termsVersionId}, now(), ${generateTicketCode()}, now(), now()
         )
         RETURNING *
@@ -839,5 +842,16 @@ export async function removeCamarote(sql: Sql, id: string): Promise<PurchaseRow>
     RETURNING *
   `;
   if (!rows[0]) throw new PurchaseError("not_applicable", "Este ingresso não tem camarote adicionado pelo painel.", 409);
+  return rows[0];
+}
+
+/** Marca (ou desmarca) um ingresso confirmado como da diretoria da Atlética. */
+export async function setAthletic(sql: Sql, id: string, athletic: boolean): Promise<PurchaseRow> {
+  const rows = await sql<PurchaseRow[]>`
+    UPDATE purchases SET athletic = ${athletic}, updated_at = now()
+    WHERE id = ${id} AND status = 'confirmed'
+    RETURNING *
+  `;
+  if (!rows[0]) throw new PurchaseError("not_applicable", "Só ingressos confirmados podem ser marcados como Atlética.", 409);
   return rows[0];
 }

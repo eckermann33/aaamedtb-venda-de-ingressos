@@ -77,7 +77,7 @@ export default async function Dashboard() {
           <div className="k">Ingressos confirmados</div>
           <div className="v neon">{stats.confirmed}</div>
           <div className="d">
-            na lista oficial{stats.camarotes > 0 && <> · {stats.camarotes} com camarote</>}{stats.manualConfirmed > 0 && <> · {stats.manualConfirmed} lançado(s) manualmente</>}
+            na lista oficial{stats.camarotes > 0 && <> · {stats.camarotes} com camarote</>}{stats.athletic > 0 && <> · {stats.athletic} da Atlética</>}{stats.manualConfirmed > 0 && <> · {stats.manualConfirmed} lançado(s) manualmente</>}
           </div>
         </div>
         {stats.byCategory.map((c) => (

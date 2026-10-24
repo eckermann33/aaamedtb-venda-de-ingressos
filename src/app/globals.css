@@ -2177,3 +2177,9 @@ table.data tr:hover td {
 .add-ticket {
   margin-bottom: 20px;
 }
+
+.print-list .list-section {
+  margin: 22px 0 6px;
+  font-size: 1.15rem;
+  break-after: avoid;
+}

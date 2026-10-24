@@ -301,6 +301,8 @@ Depois, troque `MP_ACCESS_TOKEN` (e o webhook/assinatura, se diferente) para **p
 
 **Adicionar camarote a quem já comprou:** painel → **Compras** → abra o nome da pessoa → bloco **Camarote** → confira o valor recebido (vem com o preço da categoria; `0` = cortesia) → **Adicionar camarote**. A pessoa não precisa fazer nada: o rótulo na lista de entrada vira "Feminino + Camarote". O valor cobrado no Mercado Pago **não muda** (o estorno continua funcionando); o dinheiro do camarote recebido por fora aparece separado no resumo e no CSV. Dá para desfazer em **Remover camarote**.
 
+**Atlética (diretoria):** na página de detalhe da compra (Compras → nome da pessoa) use **Marcar como Atlética**; ou, no **Ingresso manual**, marque a caixinha **Atlética** ao lançar. Na **lista de entrada** esses nomes saem numa **seção separada**, "Atlética (diretoria)", depois da "Lista geral" (cada uma com a sua numeração). O CSV da lista oficial ganha a coluna "Seção". Não muda valor nem lotação.
+
 **CSV:** painel → "Baixar lista oficial (CSV)" (nome, categoria, código) ou "Baixar todas as compras (CSV)" (relatório financeiro). Abre direto no Excel/Numbers com acentos corretos.
 
 **Cópia de segurança do banco** (faça antes do evento e depois do evento):

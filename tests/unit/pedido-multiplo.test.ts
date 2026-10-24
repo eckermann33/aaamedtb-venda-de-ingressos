@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
+  setAthletic,
   addCamarote,
   removeCamarote,
   applyPayment,
@@ -401,5 +402,28 @@ describe("camarote adicionado pelo painel", () => {
     await expectError(addCamarote(sql(), lead.id, 3000), "not_applicable");
     await expectError(removeCamarote(sql(), lead.id), "not_applicable");
     await sql()`DELETE FROM ticket_categories WHERE id = 'camarote'`;
+  });
+});
+
+describe("seção Atlética (diretoria)", () => {
+  it("manual com athletic e marcação em ingresso existente; lista separa as seções", async () => {
+    const [dir] = await createManualTickets(sql(), { names: ["Diretor Presidente Silva"], categoryId: "masculino", priceCents: 0, phone: null, note: "Diretoria", athletic: true });
+    expect(dir.athletic).toBe(true);
+    const lead = await createPurchase(deps(mp), request(terms, { fullName: "Aluna Comum Teste" }));
+    await applyPayment(sql(), mp.pay({ id: lead.id, amount_cents: 2300, payment_method: "pix" }, "approved"));
+    const other = await createPurchase(deps(mp), request(terms, { fullName: "Diretora Tesoureira Lima" }));
+    await expectError(setAthletic(sql(), other.id, true), "not_applicable"); // pendente
+    await applyPayment(sql(), mp.pay({ id: other.id, amount_cents: 2300, payment_method: "pix" }, "approved"));
+    await setAthletic(sql(), other.id, true);
+
+    const list = await officialList(sql());
+    expect(list.map((r) => [r.full_name, r.athletic])).toEqual([
+      ["Aluna Comum Teste", false],
+      ["Diretor Presidente Silva", true],
+      ["Diretora Tesoureira Lima", true],
+    ]);
+    expect((await getStats(sql())).athletic).toBe(2);
+    await setAthletic(sql(), other.id, false);
+    expect((await getStats(sql())).athletic).toBe(1);
   });
 });

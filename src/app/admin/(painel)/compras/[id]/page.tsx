@@ -6,7 +6,7 @@ import { formatDateTime } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
 import { getSql } from "@/server/db";
 import { getOrderTickets, getPurchase, isUuid } from "@/server/purchases";
-import { AnonymizeButton, CamaroteForm, CancelManualButton, RefundButton, TransferForm } from "../../actions";
+import { AnonymizeButton, AthleticToggle, CamaroteForm, CancelManualButton, RefundButton, TransferForm } from "../../actions";
 
 export default async function PurchaseDetail(props: PageProps<"/admin/compras/[id]">) {
   const { id } = await props.params;
@@ -128,6 +128,13 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
             mais. O código interno do ingresso continua o mesmo.
           </p>
           <TransferForm purchaseId={p.id} currentName={p.full_name} />
+        </div>
+      )}
+
+      {p.status === "confirmed" && (
+        <div className="panel">
+          <h2>Atlética (diretoria)</h2>
+          <AthleticToggle purchaseId={p.id} athletic={p.athletic} />
         </div>
       )}
 

@@ -115,6 +115,7 @@ export default async function PurchasesPage(props: PageProps<"/admin/compras">) 
               <tr key={r.id}>
                 <td className="name">
                   {r.full_name}
+                  {r.athletic && <span className="badge badge-muted" style={{ marginLeft: 8 }}>Atlética</span>}
                   {r.attention && (
                     <div style={{ marginTop: 4 }}>
                       <AttentionBadge attention={r.attention} />

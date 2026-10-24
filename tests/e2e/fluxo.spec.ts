@@ -480,6 +480,36 @@ test.describe("painel administrativo", () => {
     await expect(page.getByRole("button", { name: "Adicionar camarote" })).toBeVisible();
   });
 
+  test("Atlética: marcar ingresso e lançar cortesia da diretoria; lista impressa tem seção separada", async ({ page, request, baseURL }) => {
+    const p = await createPurchaseViaApi(request, baseURL!, { name: "Tesoureira Clara Mendes" });
+    await payViaMock(p, "approved");
+    await loginAdmin(page);
+    page.on("dialog", (d) => d.accept());
+    await page.goto(`/admin/compras/${p.id}`);
+    await page.getByRole("button", { name: "Marcar como Atlética" }).click();
+    await expect(page.getByRole("button", { name: "Tirar da Atlética" })).toBeVisible();
+
+    await page.goto("/admin/manual");
+    await page.getByLabel("Nome completo de cada pessoa (um por linha)").fill("Presidente Joao Batista");
+    await page.getByText(/Atlética.* \(diretoria\)/).click();
+    await page.getByText("Confirmo que todas as pessoas acima têm 18 anos").click();
+    await page.getByRole("button", { name: /Lançar 1 ingresso/ }).click();
+    await expect(page.getByText("1 ingresso(s) lançado(s)")).toBeVisible();
+    await db`INSERT INTO purchases (client_request_id, full_name, name_search, category_id, category_label, ticket_price_cents, fee_cents, amount_cents, payment_method, source, status, adult_confirmed, terms_version_id, terms_accepted_at, ticket_code, expires_at, confirmed_at)
+             SELECT gen_random_uuid(), 'Convidado Geral Souza', 'convidado geral souza', 'feminino', 'Feminino', 2000, 0, 2000, 'manual', 'manual', 'confirmed', true, current_terms_version_id, now(), 'INV-GERAL00001', now(), now() FROM settings`;
+
+    await page.goto("/admin/lista");
+    await expect(page.getByRole("heading", { name: "Lista geral" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Atlética (diretoria)" })).toBeVisible();
+    const sections = page.locator(".print-list table");
+    await expect(sections.nth(0)).toContainText("Convidado Geral Souza");
+    await expect(sections.nth(0)).not.toContainText("Tesoureira Clara Mendes");
+    await expect(sections.nth(1)).toContainText("Tesoureira Clara Mendes");
+    await expect(sections.nth(1)).toContainText("Presidente Joao Batista");
+    const csv = await (await page.request.get("/api/admin/export?scope=official")).text();
+    expect(csv).toContain("Atlética;Presidente Joao Batista");
+  });
+
   test("fechar vendas pelo painel e bloqueio de abertura com pendências", async ({ page }) => {
     await loginAdmin(page);
     page.on("dialog", (d) => d.accept());
