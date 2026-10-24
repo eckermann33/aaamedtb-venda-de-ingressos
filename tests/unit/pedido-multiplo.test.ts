@@ -417,11 +417,10 @@ describe("seção Atlética (diretoria)", () => {
     await setAthletic(sql(), other.id, true);
 
     const list = await officialList(sql());
-    expect(list.map((r) => [r.full_name, r.athletic])).toEqual([
-      ["Aluna Comum Teste", false],
-      ["Diretor Presidente Silva", true],
-      ["Diretora Tesoureira Lima", true],
-    ]);
+    // Geral primeiro, Atlética depois (a ordem alfabética dentro da seção depende da collation do banco).
+    expect(list.map((r) => r.athletic)).toEqual([false, true, true]);
+    expect(list[0].full_name).toBe("Aluna Comum Teste");
+    expect(list.slice(1).map((r) => r.full_name).sort()).toEqual(["Diretor Presidente Silva", "Diretora Tesoureira Lima"]);
     expect((await getStats(sql())).athletic).toBe(2);
     await setAthletic(sql(), other.id, false);
     expect((await getStats(sql())).athletic).toBe(1);
