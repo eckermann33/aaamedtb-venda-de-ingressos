@@ -39,11 +39,11 @@ export async function GET(request: Request) {
   } else {
     const all = await allPurchases(sql);
     csv = toCsv(
-      ["Nome completo", "Celular/WhatsApp", "Categoria", "Valor total (R$)", "Taxa (R$)", "Forma", "Origem", "Observação", "Status da compra", "Status MP",
+      ["Nome completo", "Celular/WhatsApp", "Categoria", "Valor total (R$)", "Taxa (R$)", "Forma", "Origem", "Camarote adicionado pelo painel (R$)", "Observação", "Status da compra", "Status MP",
        "ID pagamento MP", "Código interno", "Criada em", "Confirmada em", "Alerta"],
       all.map((r) => [
         r.full_name, r.buyer_phone ? formatPhone(r.buyer_phone) : "", r.category_label, money(r.amount_cents), money(r.fee_cents),
-        METHOD_LABEL[r.payment_method] ?? r.payment_method, r.source === "manual" ? "Manual" : "Site", r.note, STATUS_LABEL[r.status] ?? r.status, r.payment_status,
+        METHOD_LABEL[r.payment_method] ?? r.payment_method, r.source === "manual" ? "Manual" : "Site", r.camarote_extra_cents === null ? "" : money(r.camarote_extra_cents), r.note, STATUS_LABEL[r.status] ?? r.status, r.payment_status,
         r.mp_payment_id, r.ticket_code, formatDateTime(r.created_at), formatDateTime(r.confirmed_at), r.attention,
       ]),
     );

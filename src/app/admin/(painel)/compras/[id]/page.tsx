@@ -6,7 +6,7 @@ import { formatDateTime } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
 import { getSql } from "@/server/db";
 import { getOrderTickets, getPurchase, isUuid } from "@/server/purchases";
-import { AnonymizeButton, CancelManualButton, RefundButton, TransferForm } from "../../actions";
+import { AnonymizeButton, CamaroteForm, CancelManualButton, RefundButton, TransferForm } from "../../actions";
 
 export default async function PurchaseDetail(props: PageProps<"/admin/compras/[id]">) {
   const { id } = await props.params;
@@ -21,6 +21,8 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
   const [terms] = await sql<{ created_at: Date }[]>`SELECT created_at FROM terms_versions WHERE id = ${p.terms_version_id}`;
   const row = p;
   const manual = p.source === "manual";
+  const [camaroteCat] = await sql<{ price_cents: number }[]>`SELECT price_cents FROM ticket_categories WHERE id = 'camarote'`;
+  const camaroteDefault = camaroteCat?.price_cents ?? 3000;
   // Pedido com vários ingressos: o pagamento e o estorno ficam na linha principal.
   const orderLeadId = p.lead_id ?? p.id;
   const order = manual ? [] : await getOrderTickets(sql, orderLeadId);
@@ -126,6 +128,19 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
             mais. O código interno do ingresso continua o mesmo.
           </p>
           <TransferForm purchaseId={p.id} currentName={p.full_name} />
+        </div>
+      )}
+
+      {p.status === "confirmed" && !row.anonymized_at && (
+        <div className="panel">
+          <h2>Camarote</h2>
+          <CamaroteForm
+            purchaseId={p.id}
+            hasCamarote={p.camarote}
+            addedByPanel={p.camarote_extra_cents !== null}
+            extraCents={p.camarote_extra_cents}
+            defaultPriceCents={camaroteDefault}
+          />
         </div>
       )}
 

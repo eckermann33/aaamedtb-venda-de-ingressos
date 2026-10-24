@@ -461,6 +461,25 @@ test.describe("painel administrativo", () => {
     expect((await db`SELECT 1 FROM purchases`).length).toBe(0);
   });
 
+  test("camarote pelo painel: organização adiciona ao nome já comprado e a lista impressa mostra", async ({ page, request, baseURL }) => {
+    const p = await createPurchaseViaApi(request, baseURL!, { name: "Isabela Moraes Tavares" });
+    await payViaMock(p, "approved");
+    await loginAdmin(page);
+    page.on("dialog", (d) => d.accept());
+    await page.goto(`/admin/compras/${p.id}`);
+    await expect(page.getByLabel("Valor do camarote recebido (R$)")).toHaveValue("30,00");
+    await page.getByRole("button", { name: "Adicionar camarote" }).click();
+    await expect(page.getByText(/já tem camarote/)).toBeVisible();
+    const [row] = await db`SELECT amount_cents, camarote, camarote_extra_cents, category_label FROM purchases`;
+    expect(row).toMatchObject({ amount_cents: 2300, camarote: true, camarote_extra_cents: 3000, category_label: "Feminino + Camarote" });
+
+    await page.goto("/admin/lista");
+    await expect(page.locator(".print-list tbody")).toContainText("Feminino + Camarote");
+    await page.goto(`/admin/compras/${p.id}`);
+    await page.getByRole("button", { name: "Remover camarote" }).click();
+    await expect(page.getByRole("button", { name: "Adicionar camarote" })).toBeVisible();
+  });
+
   test("fechar vendas pelo painel e bloqueio de abertura com pendências", async ({ page }) => {
     await loginAdmin(page);
     page.on("dialog", (d) => d.accept());

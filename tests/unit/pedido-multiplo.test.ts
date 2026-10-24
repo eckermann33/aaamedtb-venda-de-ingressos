@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
+  addCamarote,
+  removeCamarote,
   applyPayment,
   cancelManualTicket,
   createManualTickets,
@@ -348,5 +350,56 @@ describe("camarote como adicional", () => {
     await sql()`UPDATE ticket_categories SET price_cents = 4000 WHERE id = 'camarote'`;
     const lead = await createPurchase(deps(mp), request(terms, { camarote: true, ...({ camarotePriceCents: 1 } as object) }));
     expect(lead.amount_cents).toBe(2000 + 4000 + 300);
+  });
+});
+
+describe("camarote adicionado pelo painel", () => {
+  it("adiciona ao ingresso confirmado sem mexer no valor cobrado e desfaz", async () => {
+    const lead = await createPurchase(deps(mp), request(terms));
+    await expectError(addCamarote(sql(), lead.id, 3000), "not_applicable"); // ainda pendente
+    await applyPayment(sql(), mp.pay({ id: lead.id, amount_cents: 2300, payment_method: "pix" }, "approved"));
+
+    const t = await addCamarote(sql(), lead.id, 3000);
+    expect(t.camarote).toBe(true);
+    expect(t.category_label).toBe("Feminino + Camarote");
+    expect(t.amount_cents).toBe(2300);
+    expect(t.camarote_extra_cents).toBe(3000);
+    expect((await officialList(sql()))[0].category_label).toBe("Feminino + Camarote");
+    const stats = await getStats(sql());
+    expect(stats.camarotes).toBe(1);
+    expect(stats.camaroteExtraCents).toBe(3000);
+    expect(stats.grossRevenueCents).toBe(2300);
+
+    await expectError(addCamarote(sql(), lead.id, 3000), "not_applicable"); // já tem
+    // estorno do Mercado Pago continua valendo (valor cobrado intacto)
+    const pay = [...mp.payments.values()][0];
+    await refundPurchasePayment(sql(), mp, lead.id, String(pay.id));
+    expect((await getPurchase(sql(), lead.id))!.status).toBe("refunded");
+
+    const second = await createManualTickets(sql(), { names: ["Segunda Pessoa Teste"], categoryId: "masculino", priceCents: null, phone: null, note: null });
+    await addCamarote(sql(), second[0].id, 2500);
+    const back = await removeCamarote(sql(), second[0].id);
+    expect(back.camarote).toBe(false);
+    expect(back.category_label).toBe("Masculino");
+    expect(back.camarote_extra_cents).toBeNull();
+    await expectError(removeCamarote(sql(), second[0].id), "not_applicable");
+  });
+
+  it("sem valor informado usa o preço da categoria camarote; sem categoria exige valor", async () => {
+    const [m] = await createManualTickets(sql(), { names: ["Terceira Pessoa Teste"], categoryId: "feminino", priceCents: null, phone: null, note: null });
+    await sql()`DELETE FROM ticket_categories WHERE id = 'camarote'`;
+    await expectError(addCamarote(sql(), m.id, null), "no_camarote_price");
+    await sql()`INSERT INTO ticket_categories (id, label, price_cents, active, sort_order) VALUES ('camarote', 'Camarote', 3000, false, 3)`;
+    expect((await addCamarote(sql(), m.id, null)).camarote_extra_cents).toBe(3000);
+    await sql()`DELETE FROM ticket_categories WHERE id = 'camarote'`;
+  });
+
+  it("ingresso comprado já com camarote não aceita o adicional nem a remoção", async () => {
+    await sql()`INSERT INTO ticket_categories (id, label, price_cents, active, sort_order) VALUES ('camarote', 'Camarote', 3000, true, 3) ON CONFLICT (id) DO UPDATE SET active = true`;
+    const lead = await createPurchase(deps(mp), request(terms, { camarote: true }));
+    await applyPayment(sql(), mp.pay({ id: lead.id, amount_cents: 5300, payment_method: "pix" }, "approved"));
+    await expectError(addCamarote(sql(), lead.id, 3000), "not_applicable");
+    await expectError(removeCamarote(sql(), lead.id), "not_applicable");
+    await sql()`DELETE FROM ticket_categories WHERE id = 'camarote'`;
   });
 });

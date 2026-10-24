@@ -20,6 +20,7 @@ export type PurchaseRow = {
   fee_cents: number;
   amount_cents: number;
   camarote: boolean;
+  camarote_extra_cents: number | null;
   payment_method: "pix" | "card" | "manual";
   lead_id: string | null;
   source: "online" | "manual";
@@ -792,5 +793,51 @@ export async function cancelManualTicket(sql: Sql, id: string): Promise<Purchase
     RETURNING *
   `;
   if (!rows[0]) throw new PurchaseError("not_cancellable", "Só ingressos manuais confirmados podem ser removidos.", 409);
+  return rows[0];
+}
+
+// ---------------------------------------------------------------------------
+// Camarote adicionado pela organização a um ingresso já confirmado.
+// ---------------------------------------------------------------------------
+
+const CAMAROTE_SUFFIX = " + Camarote";
+
+/**
+ * Marca o ingresso como "com camarote" (ex.: a pessoa pagou o camarote por fora). Não altera o
+ * valor cobrado no Mercado Pago (amount_cents); o valor recebido do camarote fica em
+ * camarote_extra_cents. Nulo = preço atual da categoria "camarote".
+ */
+export async function addCamarote(sql: Sql, id: string, priceCents: number | null): Promise<PurchaseRow> {
+  if (priceCents !== null && (!Number.isInteger(priceCents) || priceCents < 0 || priceCents > 100_000)) {
+    throw new PurchaseError("invalid_price", "Valor inválido.", 400);
+  }
+  let price = priceCents;
+  if (price === null) {
+    const [cat] = await sql<{ price_cents: number }[]>`SELECT price_cents FROM ticket_categories WHERE id = ${CAMAROTE_CATEGORY}`;
+    if (!cat) throw new PurchaseError("no_camarote_price", "Informe o valor do camarote (a categoria camarote não existe).", 400);
+    price = cat.price_cents;
+  }
+  const rows = await sql<PurchaseRow[]>`
+    UPDATE purchases
+    SET camarote = true, camarote_extra_cents = ${price}, category_label = category_label || ${CAMAROTE_SUFFIX}, updated_at = now()
+    WHERE id = ${id} AND status = 'confirmed' AND camarote = false AND anonymized_at IS NULL
+    RETURNING *
+  `;
+  if (!rows[0]) {
+    throw new PurchaseError("not_applicable", "Só ingressos confirmados que ainda não têm camarote aceitam o adicional.", 409);
+  }
+  return rows[0];
+}
+
+/** Desfaz o camarote que foi adicionado pelo painel (não mexe no que veio da compra online). */
+export async function removeCamarote(sql: Sql, id: string): Promise<PurchaseRow> {
+  const rows = await sql<PurchaseRow[]>`
+    UPDATE purchases
+    SET camarote = false, camarote_extra_cents = NULL,
+        category_label = regexp_replace(category_label, ' \\+ Camarote$', ''), updated_at = now()
+    WHERE id = ${id} AND camarote AND camarote_extra_cents IS NOT NULL
+    RETURNING *
+  `;
+  if (!rows[0]) throw new PurchaseError("not_applicable", "Este ingresso não tem camarote adicionado pelo painel.", 409);
   return rows[0];
 }

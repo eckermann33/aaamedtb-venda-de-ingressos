@@ -355,3 +355,78 @@ export function CancelManualButton({ purchaseId, name }: { purchaseId: string; n
     </span>
   );
 }
+
+/** Adiciona (ou desfaz) o camarote de um ingresso já confirmado, sem a pessoa precisar fazer nada. */
+export function CamaroteForm({
+  purchaseId,
+  hasCamarote,
+  addedByPanel,
+  extraCents,
+  defaultPriceCents,
+}: {
+  purchaseId: string;
+  hasCamarote: boolean;
+  addedByPanel: boolean;
+  extraCents: number | null;
+  defaultPriceCents: number;
+}) {
+  const router = useRouter();
+  const [price, setPrice] = useState(reais(defaultPriceCents));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const cents = Math.round(Number(price.replace(/\./g, "").replace(",", ".").trim()) * 100);
+
+  async function send(body: unknown, okText: string) {
+    setBusy(true);
+    setMsg(null);
+    const r = await post(`/api/admin/purchases/${purchaseId}/camarote`, body);
+    setBusy(false);
+    if (!r.ok) return setMsg({ ok: false, text: r.data?.error?.message ?? "Erro." });
+    setMsg({ ok: true, text: okText });
+    router.refresh();
+  }
+
+  if (hasCamarote) {
+    return (
+      <div>
+        <p className="hint">
+          Este ingresso <strong>já tem camarote</strong>
+          {addedByPanel && extraCents !== null ? ` (adicionado pelo painel por R$ ${reais(extraCents)})` : " (comprado no site)"}.
+        </p>
+        {addedByPanel && (
+          <button
+            className="btn btn-danger btn-sm"
+            disabled={busy}
+            onClick={() => {
+              if (confirm("Remover o camarote deste ingresso?")) send({ action: "remove" }, "Camarote removido.");
+            }}
+          >
+            Remover camarote
+          </button>
+        )}
+        {msg && <p className={msg.ok ? "hint" : "field-error"}>{msg.text}</p>}
+      </div>
+    );
+  }
+  return (
+    <form
+      className="toolbar"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!Number.isFinite(cents) || cents < 0) return setMsg({ ok: false, text: "Valor inválido." });
+        if (!confirm(`Adicionar camarote a este ingresso (R$ ${reais(cents)} recebidos por fora)?`)) return;
+        send({ action: "add", priceCents: cents }, "Camarote adicionado. Já aparece na lista de entrada.");
+      }}
+    >
+      <div className="field">
+        <label htmlFor="camarote-valor">Valor do camarote recebido (R$)</label>
+        <input id="camarote-valor" className="input" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+        <span className="hint">Use 0 se for cortesia. Não mexe no valor cobrado no Mercado Pago.</span>
+      </div>
+      <button className="btn btn-sm" style={{ minHeight: 46 }} disabled={busy}>
+        {busy ? "Salvando…" : "Adicionar camarote"}
+      </button>
+      {msg && <p className={msg.ok ? "hint" : "field-error"}>{msg.text}</p>}
+    </form>
+  );
+}

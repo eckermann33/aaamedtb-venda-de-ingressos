@@ -98,6 +98,7 @@ export default async function Dashboard() {
           <div className="d">
             Ingressos {formatBRL(stats.ticketRevenueCents)} + taxas {formatBRL(stats.feeRevenueCents)} · antes das tarifas
             do Mercado Pago
+            {stats.camaroteExtraCents > 0 && <> · + {formatBRL(stats.camaroteExtraCents)} de camarote adicionado pelo painel (fora do Mercado Pago)</>}
             {stats.manualConfirmed > 0 && <> · inclui {formatBRL(stats.manualRevenueCents)} de ingressos manuais</>}
           </div>
         </div>

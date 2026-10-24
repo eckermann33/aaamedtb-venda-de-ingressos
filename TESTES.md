@@ -7,8 +7,8 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Camada | Ferramenta | Resultado |
 | --- | --- | --- |
 | Tipos (TypeScript) | `npm run typecheck` | ✅ sem erros |
-| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 71/71 |
-| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 22/22 |
+| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 74/74 |
+| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 23/23 |
 | Build de produção | `npm run build` | ✅ |
 
 **Importante:** os testes de pagamento usam um **simulador local** do Mercado Pago (`tests/mock-mp/server.mjs`), que imita a API e envia webhooks assinados. O ambiente onde o projeto foi construído **não tem acesso à rede do Mercado Pago**, então **não houve teste contra o sandbox nem contra a produção do Mercado Pago**. Isso precisa ser feito antes de abrir as vendas (roteiro na seção 7 do README).
