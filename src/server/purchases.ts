@@ -728,6 +728,8 @@ export type ManualTicketsInput = {
   note: string | null;
   /** Cortesia da diretoria da Atlética: vai para a seção "Atlética" da lista de entrada. */
   athletic?: boolean;
+  /** Rótulo da categoria na lista (ex.: "Atlética"); por padrão usa o nome da categoria. */
+  label?: string;
 };
 
 /**
@@ -776,7 +778,7 @@ export async function createManualTickets(sql: Sql, input: ManualTicketsInput): 
           ticket_price_cents, fee_cents, amount_cents, payment_method, source, note, athletic, status,
           adult_confirmed, terms_version_id, terms_accepted_at, ticket_code, expires_at, confirmed_at
         ) VALUES (
-          ${randomUUID()}, ${name}, ${searchableName(name)}, ${phone}, ${category.id}, ${category.label},
+          ${randomUUID()}, ${name}, ${searchableName(name)}, ${phone}, ${category.id}, ${input.label ?? category.label},
           ${price}, 0, ${price}, 'manual', 'manual', ${note}, ${input.athletic === true}, 'confirmed',
           true, ${settings.termsVersionId}, now(), ${generateTicketCode()}, now(), now()
         )
@@ -854,4 +856,23 @@ export async function setAthletic(sql: Sql, id: string, athletic: boolean): Prom
   `;
   if (!rows[0]) throw new PurchaseError("not_applicable", "Só ingressos confirmados podem ser marcados como Atlética.", 409);
   return rows[0];
+}
+
+/**
+ * Cadastra a diretoria da Atlética: ingressos de cortesia (R$ 0) que saem na seção "Atlética" da
+ * lista de entrada, sem escolher categoria. Ocupam vaga na lotação como qualquer ingresso.
+ */
+export async function createAthleticTickets(sql: Sql, names: string[]): Promise<PurchaseRow[]> {
+  // O banco exige uma categoria; usa a primeira, mas o rótulo da lista é "Atlética".
+  const [cat] = await sql<{ id: string }[]>`SELECT id FROM ticket_categories ORDER BY sort_order, id LIMIT 1`;
+  if (!cat) throw new PurchaseError("invalid_category", "Cadastre uma categoria de ingresso em Configurações primeiro.", 409);
+  return createManualTickets(sql, {
+    names,
+    categoryId: cat.id,
+    priceCents: 0,
+    phone: null,
+    note: "Diretoria da Atlética",
+    athletic: true,
+    label: "Atlética",
+  });
 }

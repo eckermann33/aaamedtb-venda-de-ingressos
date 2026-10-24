@@ -510,6 +510,27 @@ test.describe("painel administrativo", () => {
     expect(csv).toContain("Atlética;Presidente Joao Batista");
   });
 
+  test("página Atlética: cola os nomes da diretoria e saem na seção separada da lista", async ({ page, request }) => {
+    const anon = await request.post("/api/admin/atletica", { headers: { Origin: "http://localhost" }, data: {} });
+    expect([401, 403]).toContain(anon.status());
+    await loginAdmin(page);
+    await page.getByRole("link", { name: "Atlética", exact: true }).first().click();
+    await expect(page.getByRole("heading", { name: "Atlética (diretoria)", level: 1 })).toBeVisible();
+    await page.getByLabel("Nome completo de cada pessoa (um por linha)").fill("Presidente Joao Batista\nTesoureira Maria Clara Reis");
+    const add = page.getByRole("button", { name: /Adicionar 2 à Atlética/ });
+    await expect(add).toBeDisabled();
+    await page.getByText("Confirmo que todas as pessoas acima têm 18 anos").click();
+    await add.click();
+    await expect(page.getByText("2 nome(s) adicionado(s) à seção Atlética.")).toBeVisible();
+    await expect(page.getByRole("row", { name: /Presidente Joao Batista/ })).toBeVisible();
+
+    await page.goto("/admin/lista");
+    await expect(page.getByRole("heading", { name: "Atlética (diretoria)" })).toBeVisible();
+    await expect(page.locator(".print-list table").nth(1)).toContainText("Tesoureira Maria Clara Reis");
+    const csv = await (await page.request.get("/api/admin/export?scope=official")).text();
+    expect(csv).toContain("Atlética;Presidente Joao Batista");
+  });
+
   test("fechar vendas pelo painel e bloqueio de abertura com pendências", async ({ page }) => {
     await loginAdmin(page);
     page.on("dialog", (d) => d.accept());

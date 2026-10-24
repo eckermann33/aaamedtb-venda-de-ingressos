@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/admin", label: "Resumo" },
   { href: "/admin/compras", label: "Compras" },
   { href: "/admin/manual", label: "Ingresso manual" },
+  { href: "/admin/atletica", label: "Atlética" },
   { href: "/admin/lista", label: "Lista de entrada" },
   { href: "/admin/configuracoes", label: "Configurações" },
   { href: "/admin/auditoria", label: "Auditoria" },
@@ -468,5 +469,56 @@ export function AthleticToggle({ purchaseId, athletic }: { purchaseId: string; a
       </button>
       {error && <p className="field-error">{error}</p>}
     </div>
+  );
+}
+
+/** Cola os nomes da diretoria da Atlética: entram direto na seção Atlética da lista. */
+export function AthleticForm() {
+  const router = useRouter();
+  const [names, setNames] = useState("");
+  const [adult, setAdult] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const list = names.split("\n").map((n) => n.trim()).filter(Boolean);
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setMsg(null);
+        const r = await post("/api/admin/atletica", { names: list, adultConfirmed: adult });
+        setBusy(false);
+        if (!r.ok) return setMsg({ ok: false, text: r.data?.error?.message ?? "Erro." });
+        setMsg({ ok: true, text: `${r.data.count} nome(s) adicionado(s) à seção Atlética.` });
+        setNames("");
+        setAdult(false);
+        router.refresh();
+      }}
+    >
+      <div className="field">
+        <label htmlFor="a-names">Nome completo de cada pessoa (um por linha)</label>
+        <textarea
+          id="a-names"
+          className="input"
+          style={{ minHeight: 150 }}
+          value={names}
+          onChange={(e) => setNames(e.target.value)}
+          placeholder={"Fulano de Tal\nBeltrana Souza Lima"}
+        />
+        <span className="hint">{list.length} nome(s). Cada um precisa de nome e sobrenome.</span>
+      </div>
+      <label className="checkbox">
+        <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} />
+        <span>Confirmo que todas as pessoas acima têm 18 anos ou mais.</span>
+      </label>
+      <button className="btn" disabled={busy || list.length === 0 || !adult}>
+        {busy ? "Adicionando…" : `Adicionar ${list.length || ""} à Atlética`.replace("  ", " ")}
+      </button>
+      {msg && (
+        <p className={msg.ok ? "hint" : "field-error"} role={msg.ok ? "status" : "alert"} style={{ marginTop: 10 }}>
+          {msg.text}
+        </p>
+      )}
+    </form>
   );
 }

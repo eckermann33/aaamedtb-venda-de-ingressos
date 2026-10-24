@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
+  createAthleticTickets,
   setAthletic,
   addCamarote,
   removeCamarote,
@@ -424,5 +425,28 @@ describe("seção Atlética (diretoria)", () => {
     expect((await getStats(sql())).athletic).toBe(2);
     await setAthletic(sql(), other.id, false);
     expect((await getStats(sql())).athletic).toBe(1);
+  });
+});
+
+describe("cadastro da diretoria da Atlética", () => {
+  it("cria ingressos de cortesia na seção Atlética sem escolher categoria", async () => {
+    const rows = await createAthleticTickets(sql(), ["Fulano de Tal Silva", "Beltrana Souza Lima"]);
+    expect(rows).toHaveLength(2);
+    for (const r of rows) {
+      expect(r).toMatchObject({ status: "confirmed", athletic: true, source: "manual", amount_cents: 0, category_label: "Atlética" });
+    }
+    const list = await officialList(sql());
+    expect(list.every((r) => r.athletic)).toBe(true);
+    expect(list.map((r) => r.category_label)).toEqual(["Atlética", "Atlética"]);
+    const stats = await getStats(sql());
+    expect(stats.athletic).toBe(2);
+    expect(stats.grossRevenueCents).toBe(0);
+  });
+
+  it("respeita a lotação e valida os nomes", async () => {
+    await resetDb({ capacity: 1 });
+    await expectError(createAthleticTickets(sql(), ["Fulano de Tal Silva", "Beltrana Souza Lima"]), "not_enough");
+    await expectError(createAthleticTickets(sql(), ["Fulano"]), "invalid_name");
+    expect((await createAthleticTickets(sql(), ["Fulano de Tal Silva"])).length).toBe(1);
   });
 });

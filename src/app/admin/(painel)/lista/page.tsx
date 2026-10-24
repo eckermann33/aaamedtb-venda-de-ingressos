@@ -44,7 +44,7 @@ export default async function EntryList() {
           {[...byCategory.entries()].map(([k, v]) => ` · ${k}: ${v}`).join("")} · gerada em {formatDateTime(new Date())}.
           Confira o documento oficial com foto e a idade (18+).
         </p>
-        <EntryTable title={athleticRows.length > 0 ? "Lista geral" : null} rows={generalRows} empty="Nenhum ingresso confirmado ainda." />
+        <EntryTable title={athleticRows.length > 0 ? "Lista geral" : null} rows={generalRows} empty={athleticRows.length > 0 ? "Nenhum ingresso na lista geral." : "Nenhum ingresso confirmado ainda."} />
         {athleticRows.length > 0 && (
           <EntryTable title="Atlética (diretoria)" rows={athleticRows} empty="" />
         )}
