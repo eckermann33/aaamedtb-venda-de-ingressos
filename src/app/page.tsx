@@ -17,6 +17,8 @@ export default async function EventPage() {
   const e = s.event;
   const date = eventDateParts(e.date);
   const fee = s.serviceFeeCents;
+  // Camarote vendido pelo site quando existe uma categoria ativa "camarote" (criada no painel).
+  const camaroteOnline = s.categories.some((c) => c.id === "camarote");
   const time = e.startTime ? (e.endTime ? `${e.startTime} às ${e.endTime}` : `A partir das ${e.startTime}`) : null;
 
   return (
@@ -157,7 +159,9 @@ export default async function EventPage() {
               {s.categories.map((c) => (
                 <article className="ticket" key={c.id}>
                   <div className="ticket-main">
-                    <span className="label">Pista · {e.name}</span>
+                    <span className="label">
+                      {c.id === "camarote" ? "Camarote" : "Pista"} · {e.name}
+                    </span>
                     <h3 className="ticket-name">{c.label}</h3>
                     <div className="ticket-price">
                       <small>R$</small>
@@ -253,7 +257,11 @@ export default async function EventPage() {
                 <p>{e.camarote}</p>
                 <div className="notice notice-warn">
                   <IconInfo size={20} />
-                  <span>O camarote não é vendido pelo site nesta edição.</span>
+                  <span>
+                    {camaroteOnline
+                      ? "O camarote também é vendido pelo site: escolha a categoria Camarote na compra."
+                      : "O camarote não é vendido pelo site nesta edição."}
+                  </span>
                 </div>
                 <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "22px 0" }} />
                 <span className="label">Classificação etária</span>

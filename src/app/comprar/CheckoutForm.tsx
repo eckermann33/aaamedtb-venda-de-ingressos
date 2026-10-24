@@ -409,8 +409,8 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           <div className="notice" style={{ marginBottom: 18 }}>
             <IconCheck size={20} />
             <span>
-              {count > 1 ? "Cada ingresso é individual e nominal." : "Ingresso individual e nominal."} Entrada só para maiores de 18 anos, com documento oficial com foto. O
-              camarote é vendido à parte, na entrada. Sem cobranças além do total acima.
+              {count > 1 ? "Cada ingresso é individual e nominal." : "Ingresso individual e nominal."} Entrada só para maiores de 18 anos, com documento oficial com foto.{" "}
+              {categories.some((c) => c.id === "camarote") ? "Camarote é uma categoria própria de ingresso." : "O camarote é vendido à parte, na entrada."} Sem cobranças além do total acima.
             </span>
           </div>
 
