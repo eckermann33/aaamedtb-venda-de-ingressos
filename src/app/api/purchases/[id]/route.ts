@@ -3,6 +3,7 @@ import { getMercadoPago } from "@/server/mercadopago";
 import { clientIp, errorResponse, json } from "@/server/http";
 import { getOrder, isUuid, reconcilePurchase, toPublic } from "@/server/purchases";
 import { checkRateLimit, rateKey } from "@/server/rate-limit";
+import { getEntryMode } from "@/server/settings";
 
 /** Estado atual da compra, sempre lido do banco (e conferido no Mercado Pago se pendente). */
 export async function GET(request: Request, ctx: RouteContext<"/api/purchases/[id]">) {
@@ -22,5 +23,6 @@ export async function GET(request: Request, ctx: RouteContext<"/api/purchases/[i
     await reconcilePurchase(sql, getMercadoPago(), id, { hintPaymentId: hint });
     order = (await getOrder(sql, id))!;
   }
-  return json({ purchase: toPublic(order.lead, order.tickets) });
+  const showEntry = (await getEntryMode(sql)) === "qrcode";
+  return json({ purchase: toPublic(order.lead, order.tickets, { showEntry }) });
 }

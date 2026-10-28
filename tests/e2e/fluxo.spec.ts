@@ -5,10 +5,6 @@ test.beforeEach(async () => {
   await readyEvent();
 });
 
-test.afterAll(async () => {
-  await db.end();
-});
-
 test("página do evento mostra preços com a taxa e não exibe nomes de participantes", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Party do\s*Saco Cheio/i })).toBeVisible();

@@ -3,7 +3,8 @@ import postgres from "postgres";
 import { E2E_DB, MOCK_URL } from "../../playwright.config";
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from "./global-setup";
 
-export const db = postgres(E2E_DB, { max: 2, onnotice: () => {} });
+// Fecha sozinha quando fica ociosa: os arquivos de teste rodam no mesmo processo e compartilham a conexão.
+export const db = postgres(E2E_DB, { max: 2, idle_timeout: 2, onnotice: () => {} });
 
 /** Evento configurado e vendas abertas (dados de TESTE, nunca de produção). */
 export async function readyEvent(opts: { capacity?: number | null; salesOpen?: boolean } = {}) {

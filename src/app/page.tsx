@@ -20,6 +20,7 @@ export default async function EventPage() {
   // Camarote vendido pelo site quando existe uma categoria ativa "camarote" (criada no painel).
   const camaroteCategory = s.categories.find((c) => c.id === "camarote") ?? null;
   const camaroteOnline = camaroteCategory !== null;
+  const qr = s.entryMode === "qrcode";
   const time = e.startTime ? (e.endTime ? `${e.startTime} às ${e.endTime}` : `A partir das ${e.startTime}`) : null;
 
   return (
@@ -160,43 +161,55 @@ export default async function EventPage() {
               {s.categories
                 .filter((c) => c.id !== "camarote")
                 .map((c) => (
-                <article className="ticket" key={c.id}>
-                  <div className="ticket-main">
-                    <span className="label">
-                      Pista · {e.name}
-                    </span>
-                    <h3 className="ticket-name">{c.label}</h3>
-                    <div className="ticket-price">
-                      <small>R$</small>
-                      {(c.priceCents / 100).toFixed(2).replace(".", ",")}
+                  <article className="ticket" key={c.id}>
+                    <div className="ticket-main">
+                      <span className="label">Pista · {e.name}</span>
+                      <h3 className="ticket-name">{c.label}</h3>
+                      <div className="ticket-price">
+                        <small>R$</small>
+                        {(c.priceCents / 100).toFixed(2).replace(".", ",")}
+                      </div>
+                      {fee > 0 && (
+                        <p className="ticket-fee">
+                          + <strong>{formatBRL(fee)}</strong> de taxa de serviço · total{" "}
+                          <strong>{formatBRL(c.priceCents + fee)}</strong>
+                        </p>
+                      )}
                     </div>
-                    {fee > 0 && (
-                      <p className="ticket-fee">
-                        + <strong>{formatBRL(fee)}</strong> de taxa de serviço · total{" "}
-                        <strong>{formatBRL(c.priceCents + fee)}</strong>
-                      </p>
-                    )}
-                  </div>
-                  <div className="ticket-stub">
-                    {s.canBuy ? (
-                      <Link className="btn" href={`/comprar?categoria=${c.id}`} aria-label={`Comprar ingresso ${c.label}`}>
-                        Comprar
-                      </Link>
-                    ) : (
-                      <span className="btn" aria-disabled="true">
-                        {s.soldOut ? "Esgotado" : "Em breve"}
-                      </span>
-                    )}
-                  </div>
-                </article>
-              ))}
+                    <div className="ticket-stub">
+                      {s.canBuy ? (
+                        <Link
+                          className="btn"
+                          href={`/comprar?categoria=${c.id}`}
+                          aria-label={`Comprar ingresso ${c.label}`}
+                        >
+                          Comprar
+                        </Link>
+                      ) : (
+                        <span className="btn" aria-disabled="true">
+                          {s.soldOut ? "Esgotado" : "Em breve"}
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                ))}
             </div>
             <div className="notice" style={{ marginTop: 18 }}>
               <IconInfo size={20} />
               <span>
-                O ingresso é <strong>individual e nominal</strong>: não enviamos ingresso por e-mail nem por WhatsApp.
-                Depois que o pagamento é aprovado, <strong>seu nome completo entra na lista oficial da portaria</strong>.
-                Leve um documento oficial com foto.
+                O ingresso é <strong>individual e nominal</strong>.{" "}
+                {qr ? (
+                  <>
+                    Depois que o pagamento é aprovado, <strong>seu ingresso com QR Code aparece na tela</strong>: mostre
+                    o QR na portaria junto com um documento oficial com foto no mesmo nome.
+                  </>
+                ) : (
+                  <>
+                    Não enviamos ingresso por e-mail nem por WhatsApp. Depois que o pagamento é aprovado,{" "}
+                    <strong>seu nome completo entra na lista oficial da portaria</strong>. Leve um documento oficial com
+                    foto.
+                  </>
+                )}
               </span>
             </div>
           </div>
@@ -223,8 +236,12 @@ export default async function EventPage() {
                 <span>Pagamento seguro pelo Mercado Pago.</span>
               </li>
               <li>
-                <strong>Seu nome na lista</strong>
-                <span>Pagamento aprovado = nome na lista oficial da portaria.</span>
+                <strong>{qr ? "Seu QR Code" : "Seu nome na lista"}</strong>
+                <span>
+                  {qr
+                    ? "Pagamento aprovado = ingresso com QR Code na tela. Mostre na entrada com seu documento."
+                    : "Pagamento aprovado = nome na lista oficial da portaria."}
+                </span>
               </li>
             </ol>
           </div>

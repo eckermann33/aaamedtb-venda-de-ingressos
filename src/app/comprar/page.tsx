@@ -35,6 +35,7 @@ export default async function BuyPage(props: PageProps<"/comprar">) {
               terms={s.terms}
               eventName={s.event.name}
               maxTickets={MAX_TICKETS_PER_ORDER}
+              entryMode={s.entryMode}
             />
           ) : (
             <div className="card status-card">

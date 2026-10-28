@@ -7,8 +7,8 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Camada | Ferramenta | Resultado |
 | --- | --- | --- |
 | Tipos (TypeScript) | `npm run typecheck` | ✅ sem erros |
-| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 77/77 |
-| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 25/25 |
+| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 90/90 |
+| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 28/28 |
 | Build de produção | `npm run build` | ✅ |
 
 **Importante:** os testes de pagamento usam um **simulador local** do Mercado Pago (`tests/mock-mp/server.mjs`), que imita a API e envia webhooks assinados. O ambiente onde o projeto foi construído **não tem acesso à rede do Mercado Pago**, então **não houve teste contra o sandbox nem contra a produção do Mercado Pago**. Isso precisa ser feito antes de abrir as vendas (roteiro na seção 7 do README).
@@ -52,6 +52,25 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Ingresso manual (painel) | Integração e navegador: vários nomes de uma vez, valor padrão/personalizado/cortesia, sem taxa, entra na lista impressa e no CSV, ocupa vaga, remoção libera vaga, exige login, recusa lotação estourada, banco impede forma de pagamento online em ingresso manual |
 
 **Não testado com o Mercado Pago real:** o checkout com `quantity` maior que 1 (taxa de serviço × N) segue o formato documentado da API de preferências, mas só foi exercitado no simulador local. Faça uma compra real de 2 ingressos antes de divulgar.
+
+## Entrada por QR Code (portaria)
+
+| Cenário | Como foi verificado |
+| --- | --- |
+| Interruptor lista ↔ QR Code | Navegador e integração: ativar exige código da portaria (só o hash scrypt é salvo); voltar para a lista desliga o leitor (página e APIs respondem "desativada") |
+| Comprador recebe o QR | Navegador: pedido aprovado mostra um QR por ingresso com o código escrito; página individual do ingresso; no modo lista não aparece QR |
+| Cada ingresso tem código próprio | Integração: pedido de vários ingressos e ingresso manual; pendente não tem código |
+| Leitura pela câmera | Navegador com **câmera falsa do Chromium** exibindo o QR de um ingresso: o leitor encontra o QR sozinho, mostra o nome, confirma e, ao ler de novo, mostra "JÁ ENTROU" |
+| QR gerado é legível | Integração: QR gerado pela biblioteca `qrcode` é lido de volta pela `jsqr` (a mesma do leitor) |
+| Digitação do código | Navegador: código em minúsculas e com traços é aceito; código inexistente → "NÃO ENCONTRADO"; aparelho sem câmera mostra aviso e permite digitar |
+| Uma entrada por QR | Integração: 5 confirmações simultâneas → 1 entrada; segunda leitura → "já entrou" com horário e quem confirmou |
+| Ingresso estornado | Integração: leitor recusa e não registra entrada |
+| Transferência | Integração: novo QR é gerado e o antigo passa a "não encontrado" |
+| Acesso da portaria | Navegador: código errado é recusado; a sessão da portaria não abre o painel nem as APIs do painel; trocar o código desconecta o leitor |
+| Painel | Navegador: contador de entradas, lista com quem confirmou e "Desfazer entrada" |
+| Dados na portaria | Integração: o leitor recebe só nome, categoria, camarote/Atlética e horário de entrada (sem telefone nem valores) |
+
+**Não testado:** leitura em iPhone/Android reais (o teste usa a câmera falsa do Chromium). Faça um teste no celular de quem vai ficar na porta antes da festa: abra `/portaria`, permita a câmera e leia o QR de um ingresso de teste.
 
 ## Outros testes
 

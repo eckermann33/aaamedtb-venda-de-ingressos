@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { EventInfo, TermsContent } from "@/config/event";
+import type { EntryMode } from "@/lib/entry-code";
 import { phoneDigits } from "@/lib/contact";
 import type { Sql, TxSql } from "./db";
 
@@ -19,6 +20,10 @@ export type Settings = {
   termsVersionId: number;
   terms: TermsContent;
   categories: Category[];
+  /** Como a portaria confere a entrada: lista impressa ou QR Code. */
+  entryMode: EntryMode;
+  /** Se o código de acesso da portaria já foi definido. */
+  doorCodeSet: boolean;
   updatedAt: Date;
 };
 
@@ -31,6 +36,8 @@ type SettingsRow = {
   service_fee_cents: number;
   current_terms_version_id: number;
   terms_content: TermsContent;
+  entry_mode: EntryMode;
+  door_code_set: boolean;
   updated_at: Date;
 };
 
@@ -63,7 +70,7 @@ export async function loadCategories(sql: Sql | TxSql, onlyActive = false): Prom
 export async function loadSettings(sql: Sql | TxSql, opts: { forUpdate?: boolean } = {}): Promise<Settings> {
   const rows = await sql<SettingsRow[]>`
     SELECT s.event, s.sales_open, s.capacity, s.service_fee_cents, s.current_terms_version_id, s.updated_at,
-           t.content AS terms_content
+           s.entry_mode, s.door_code_hash IS NOT NULL AS door_code_set, t.content AS terms_content
     FROM settings s
     JOIN terms_versions t ON t.id = s.current_terms_version_id
     WHERE s.id = 1
@@ -81,6 +88,8 @@ export async function loadSettings(sql: Sql | TxSql, opts: { forUpdate?: boolean
     termsVersionId: row.current_terms_version_id,
     terms: row.terms_content,
     categories: await loadCategories(sql),
+    entryMode: row.entry_mode,
+    doorCodeSet: row.door_code_set,
     updatedAt: row.updated_at,
   };
 }
@@ -99,13 +108,18 @@ export function readiness(
   if (blank(e.startTime)) items.push({ key: "startTime", label: "Horário de início", blocking: true });
   if (blank(e.venueName)) items.push({ key: "venueName", label: "Nome do local", blocking: true });
   if (!phoneDigits(e.contactPhone) && blank(e.contactEmail)) {
-    items.push({ key: "contactPhone", label: "Contato da organização: telefone/WhatsApp ou e-mail (exigido pela LGPD)", blocking: true });
+    items.push({
+      key: "contactPhone",
+      label: "Contato da organização: telefone/WhatsApp ou e-mail (exigido pela LGPD)",
+      blocking: true,
+    });
   }
   if (blank(t.refundPolicy)) items.push({ key: "refundPolicy", label: "Política de reembolso", blocking: true });
   if (blank(t.cancellationPolicy)) {
     items.push({ key: "cancellationPolicy", label: "Política de cancelamento do evento", blocking: true });
   }
-  if (blank(t.transferPolicy)) items.push({ key: "transferPolicy", label: "Política de transferência de ingresso", blocking: true });
+  if (blank(t.transferPolicy))
+    items.push({ key: "transferPolicy", label: "Política de transferência de ingresso", blocking: true });
   if (!settings.categories.some((c) => c.active)) {
     items.push({ key: "categories", label: "Pelo menos uma categoria de ingresso ativa", blocking: true });
   }
@@ -115,7 +129,8 @@ export function readiness(
   if (!envState.mpWebhookSecret) {
     items.push({ key: "mpWebhookSecret", label: "Assinatura secreta do webhook (MP_WEBHOOK_SECRET)", blocking: true });
   }
-  if (blank(e.venueAddress)) items.push({ key: "venueAddress", label: "Endereço do local não informado (só o nome aparece)", blocking: false });
+  if (blank(e.venueAddress))
+    items.push({ key: "venueAddress", label: "Endereço do local não informado (só o nome aparece)", blocking: false });
   if (settings.capacity === null) {
     items.push({ key: "capacity", label: "Limite de ingressos não definido (vendas sem limite)", blocking: false });
   }
@@ -132,4 +147,10 @@ export async function upsertTermsVersion(sql: Sql | TxSql, content: TermsContent
     RETURNING id
   `;
   return row.id;
+}
+
+/** Consulta rápida do modo de entrada (lista impressa ou QR Code). */
+export async function getEntryMode(sql: Sql | TxSql): Promise<EntryMode> {
+  const [row] = await sql<{ entry_mode: EntryMode }[]>`SELECT entry_mode FROM settings WHERE id = 1`;
+  return row?.entry_mode ?? "list";
 }

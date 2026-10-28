@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // O leitor da portaria usa a câmera do celular (só nesta página).
+        source: "/portaria",
+        headers: [
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
+          { key: "Cache-Control", value: "no-store" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+      {
         source: "/(admin|api/admin)/:path*",
         headers: [
           { key: "Cache-Control", value: "no-store" },

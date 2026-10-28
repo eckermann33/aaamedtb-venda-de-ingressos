@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/admin/manual", label: "Ingresso manual" },
   { href: "/admin/atletica", label: "Atlética" },
   { href: "/admin/lista", label: "Lista de entrada" },
+  { href: "/admin/portaria", label: "Portaria" },
   { href: "/admin/configuracoes", label: "Configurações" },
   { href: "/admin/auditoria", label: "Auditoria" },
 ];
@@ -71,7 +72,9 @@ export function SalesToggle({ open }: { open: boolean }) {
           setBusy(false);
           if (!r.ok) {
             const pending: string[] = r.data?.error?.pending ?? [];
-            setError(`${r.data?.error?.message ?? "Erro."}${pending.length ? " Falta: " + pending.join(", ") + "." : ""}`);
+            setError(
+              `${r.data?.error?.message ?? "Erro."}${pending.length ? " Falta: " + pending.join(", ") + "." : ""}`,
+            );
             return;
           }
           router.refresh();
@@ -112,7 +115,15 @@ export function ReconcileButton() {
   );
 }
 
-export function RefundButton({ purchaseId, mpPaymentId, label }: { purchaseId: string; mpPaymentId: string; label: string }) {
+export function RefundButton({
+  purchaseId,
+  mpPaymentId,
+  label,
+}: {
+  purchaseId: string;
+  mpPaymentId: string;
+  label: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +133,12 @@ export function RefundButton({ purchaseId, mpPaymentId, label }: { purchaseId: s
         className="btn btn-danger btn-sm"
         disabled={busy}
         onClick={async () => {
-          if (!confirm(`Estornar o pagamento ${mpPaymentId} (${label})? O dinheiro volta para o comprador e o ingresso sai da lista.`)) return;
+          if (
+            !confirm(
+              `Estornar o pagamento ${mpPaymentId} (${label})? O dinheiro volta para o comprador e o ingresso sai da lista.`,
+            )
+          )
+            return;
           setBusy(true);
           const r = await post(`/api/admin/purchases/${purchaseId}/refund`, { mpPaymentId, confirm: true });
           setBusy(false);
@@ -151,7 +167,11 @@ export function TransferForm({ purchaseId, currentName }: { purchaseId: string; 
         setBusy(true);
         const r = await post(`/api/admin/purchases/${purchaseId}/transfer`, { fullName: name });
         setBusy(false);
-        setMsg(r.ok ? { ok: true, text: "Nome atualizado na lista oficial." } : { ok: false, text: r.data?.error?.message ?? "Erro." });
+        setMsg(
+          r.ok
+            ? { ok: true, text: "Nome atualizado na lista oficial." }
+            : { ok: false, text: r.data?.error?.message ?? "Erro." },
+        );
         if (r.ok) {
           setName("");
           router.refresh();
@@ -160,7 +180,13 @@ export function TransferForm({ purchaseId, currentName }: { purchaseId: string; 
     >
       <div className="field" style={{ flex: "2 1 240px" }}>
         <label htmlFor="novo-nome">Nome completo da nova pessoa</label>
-        <input id="novo-nome" className="input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
+        <input
+          id="novo-nome"
+          className="input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoComplete="off"
+        />
       </div>
       <button className="btn btn-sm" style={{ minHeight: 46 }} disabled={busy || name.trim().length < 5}>
         {busy ? "Salvando…" : "Transferir"}
@@ -200,7 +226,7 @@ export function AnonymizeAll() {
         disabled={text !== "ANONIMIZAR"}
         onClick={async () => {
           const r = await post("/api/admin/anonymize", { confirm: text });
-          setMsg(r.ok ? `${r.data.count} compra(s) anonimizada(s).` : r.data?.error?.message ?? "Erro.");
+          setMsg(r.ok ? `${r.data.count} compra(s) anonimizada(s).` : (r.data?.error?.message ?? "Erro."));
           setText("");
         }}
       >
@@ -236,7 +262,10 @@ export function ManualTicketsForm({ categories }: { categories: ManualCategory[]
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const list = names.split("\n").map((n) => n.trim()).filter(Boolean);
+  const list = names
+    .split("\n")
+    .map((n) => n.trim())
+    .filter(Boolean);
   const cents = Math.round(Number(price.replace(/\./g, "").replace(",", ".").trim()) * 100);
   const priceOk = Number.isFinite(cents) && cents >= 0;
 
@@ -247,7 +276,12 @@ export function ManualTicketsForm({ categories }: { categories: ManualCategory[]
         e.preventDefault();
         if (!priceOk) return setMsg({ ok: false, text: "Valor inválido." });
         const total = reais(cents * list.length);
-        if (!confirm(`Lançar ${list.length} ingresso(s) manual(is), ${reais(cents)} cada (total R$ ${total})? Eles entram na lista oficial agora.`)) return;
+        if (
+          !confirm(
+            `Lançar ${list.length} ingresso(s) manual(is), ${reais(cents)} cada (total R$ ${total})? Eles entram na lista oficial agora.`,
+          )
+        )
+          return;
         setBusy(true);
         setMsg(null);
         const r = await post("/api/admin/manual", {
@@ -291,8 +325,16 @@ export function ManualTicketsForm({ categories }: { categories: ManualCategory[]
       </div>
       <div className="field">
         <label htmlFor="m-price">Valor pago por ingresso (R$)</label>
-        <input id="m-price" className="input" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
-        <span className="hint">Já vem com o preço da categoria. Coloque 0 para cortesia/convidado. Sem taxa de serviço.</span>
+        <input
+          id="m-price"
+          className="input"
+          inputMode="decimal"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+        />
+        <span className="hint">
+          Já vem com o preço da categoria. Coloque 0 para cortesia/convidado. Sem taxa de serviço.
+        </span>
       </div>
       <div className="field span-2">
         <label htmlFor="m-names">Nome completo de cada pessoa (um por linha)</label>
@@ -308,7 +350,14 @@ export function ManualTicketsForm({ categories }: { categories: ManualCategory[]
       </div>
       <div className="field">
         <label htmlFor="m-phone">Celular / WhatsApp de quem comprou (opcional)</label>
-        <input id="m-phone" className="input" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(42) 99999-9999" />
+        <input
+          id="m-phone"
+          className="input"
+          inputMode="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="(42) 99999-9999"
+        />
       </div>
       <div className="field">
         <label htmlFor="m-note">Observação interna (opcional)</label>
@@ -329,7 +378,9 @@ export function ManualTicketsForm({ categories }: { categories: ManualCategory[]
       </label>
       <label className="checkbox span-2">
         <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} />
-        <span>Confirmo que todas as pessoas acima têm 18 anos ou mais e que o pagamento já foi recebido (ou é cortesia).</span>
+        <span>
+          Confirmo que todas as pessoas acima têm 18 anos ou mais e que o pagamento já foi recebido (ou é cortesia).
+        </span>
       </label>
       <div className="span-2">
         <button className="btn" disabled={busy || list.length === 0 || !adult || !priceOk}>
@@ -401,7 +452,10 @@ export function CamaroteForm({
       <div>
         <p className="hint">
           Este ingresso <strong>já tem camarote</strong>
-          {addedByPanel && extraCents !== null ? ` (adicionado pelo painel por R$ ${reais(extraCents)})` : " (comprado no site)"}.
+          {addedByPanel && extraCents !== null
+            ? ` (adicionado pelo painel por R$ ${reais(extraCents)})`
+            : " (comprado no site)"}
+          .
         </p>
         {addedByPanel && (
           <button
@@ -430,7 +484,13 @@ export function CamaroteForm({
     >
       <div className="field">
         <label htmlFor="camarote-valor">Valor do camarote recebido (R$)</label>
-        <input id="camarote-valor" className="input" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+        <input
+          id="camarote-valor"
+          className="input"
+          inputMode="decimal"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+        />
         <span className="hint">Use 0 se for cortesia. Não mexe no valor cobrado no Mercado Pago.</span>
       </div>
       <button className="btn btn-sm" style={{ minHeight: 46 }} disabled={busy}>
@@ -479,7 +539,10 @@ export function AthleticForm() {
   const [adult, setAdult] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const list = names.split("\n").map((n) => n.trim()).filter(Boolean);
+  const list = names
+    .split("\n")
+    .map((n) => n.trim())
+    .filter(Boolean);
   return (
     <form
       onSubmit={async (e) => {
@@ -520,5 +583,173 @@ export function AthleticForm() {
         </p>
       )}
     </form>
+  );
+}
+
+const DOOR_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+/** Código aleatório fácil de ditar para a equipe da portaria (ex.: K7M2-Q9XA). */
+function randomDoorCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const chars = Array.from(bytes, (b) => DOOR_CODE_ALPHABET[b % DOOR_CODE_ALPHABET.length]).join("");
+  return `${chars.slice(0, 4)}-${chars.slice(4)}`;
+}
+
+/** Interruptor entre a lista impressa e o QR Code na portaria, com o código de acesso do leitor. */
+export function EntryModeForm({ mode, doorCodeSet }: { mode: "list" | "qrcode"; doorCodeSet: boolean }) {
+  const router = useRouter();
+  const [choice, setChoice] = useState(mode);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const needsCode = choice === "qrcode" && !doorCodeSet;
+
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (
+          choice === "list" &&
+          mode === "qrcode" &&
+          !confirm("Voltar para a lista impressa? O leitor da portaria é desligado e quem estiver usando sai.")
+        )
+          return;
+        setBusy(true);
+        setMsg(null);
+        const r = await post("/api/admin/entry", { mode: choice, doorCode: code.trim() ? code : null });
+        setBusy(false);
+        if (!r.ok) return setMsg({ ok: false, text: r.data?.error?.message ?? "Erro ao salvar." });
+        setMsg({
+          ok: true,
+          text: code.trim()
+            ? `Salvo. Anote o código da portaria agora (ele não aparece de novo): ${code.trim()}`
+            : "Salvo.",
+        });
+        setCode("");
+        router.refresh();
+      }}
+    >
+      <fieldset className="field">
+        <legend className="sr-only">Modelo de entrada</legend>
+        <div style={{ display: "grid", gap: 10 }}>
+          <label className="checkbox">
+            <input type="radio" name="entry-mode" checked={choice === "list"} onChange={() => setChoice("list")} />
+            <span>
+              <strong>Lista impressa</strong> (modelo da festa anterior): o nome entra na lista oficial e a portaria
+              confere o nome no papel. Não gera QR Code.
+            </span>
+          </label>
+          <label className="checkbox">
+            <input type="radio" name="entry-mode" checked={choice === "qrcode"} onChange={() => setChoice("qrcode")} />
+            <span>
+              <strong>QR Code na portaria</strong>: cada ingresso aprovado ganha um QR Code na tela de confirmação. A
+              equipe da entrada lê o QR pelo celular, confere o nome no documento e confirma. Cada QR vale uma entrada.
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      {choice === "qrcode" && (
+        <div className="field">
+          <label htmlFor="door-code-new">
+            {doorCodeSet ? "Trocar o código da portaria (opcional)" : "Código de acesso da portaria"}
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input
+              id="door-code-new"
+              className="input"
+              style={{ flex: "1 1 200px" }}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoComplete="off"
+              maxLength={64}
+              placeholder={doorCodeSet ? "Deixe em branco para manter o atual" : "Mínimo 6 caracteres"}
+            />
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setCode(randomDoorCode())}>
+              Gerar código
+            </button>
+          </div>
+          <span className="hint">
+            É o que a equipe da entrada digita para abrir o leitor (não dá acesso ao painel). Trocar o código desconecta
+            quem estiver usando o leitor. {doorCodeSet && "Já existe um código definido."}
+          </span>
+        </div>
+      )}
+
+      <button
+        className="btn"
+        disabled={busy || (needsCode && code.trim().length < 6) || (choice === mode && !code.trim())}
+      >
+        {busy ? "Salvando…" : "Salvar"}
+      </button>
+      {msg && (
+        <p className={msg.ok ? "hint" : "field-error"} role={msg.ok ? "status" : "alert"} style={{ marginTop: 10 }}>
+          {msg.text}
+        </p>
+      )}
+    </form>
+  );
+}
+
+/** Desfaz uma entrada confirmada por engano no leitor. */
+export function UndoCheckInButton({ purchaseId, name }: { purchaseId: string; name: string }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <span>
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={async () => {
+          if (!confirm(`Desfazer a entrada de "${name}"? O QR Code volta a valer para entrar.`)) return;
+          const r = await post(`/api/admin/purchases/${purchaseId}/checkin`);
+          if (!r.ok) setError(r.data?.error?.message ?? "Erro.");
+          router.refresh();
+        }}
+      >
+        Desfazer entrada
+      </button>
+      {error && <span className="field-error"> {error}</span>}
+    </span>
+  );
+}
+
+/** Link do ingresso com QR Code, para enviar a quem vai usar (ex.: ingresso manual ou da Atlética). */
+export function TicketLinkBox({ url, phone, name }: { url: string; phone: string | null; name: string }) {
+  const [copied, setCopied] = useState(false);
+  const text = `Oi! Seu ingresso (${name}) está aqui. Na portaria, mostre o QR Code e um documento com foto: ${url}`;
+  return (
+    <div>
+      <p style={{ wordBreak: "break-all" }}>
+        <a href={url} target="_blank" rel="noopener noreferrer">
+          {url}
+        </a>
+      </p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(url);
+              setCopied(true);
+            } catch {
+              setCopied(false);
+            }
+          }}
+        >
+          {copied ? "Copiado!" : "Copiar link"}
+        </button>
+        {phone && (
+          <a
+            className="btn btn-sm"
+            href={`https://wa.me/55${phone}?text=${encodeURIComponent(text)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Enviar pelo WhatsApp
+          </a>
+        )}
+      </div>
+    </div>
   );
 }

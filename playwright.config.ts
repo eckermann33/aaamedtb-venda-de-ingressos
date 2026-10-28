@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { writeFakeCamera } from "./tests/e2e/fake-camera";
 
 /**
  * Testes ponta a ponta: sobem o app (build de produção) + o simulador do Mercado Pago.
@@ -11,7 +12,18 @@ export const E2E_DB = process.env.E2E_DATABASE_URL ?? "postgres://invictus:devpa
 export const WEBHOOK_SECRET = "e2e-webhook-secret";
 export const MOCK_URL = `http://127.0.0.1:${MOCK_PORT}`;
 
-const chromium = process.env.CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.CHROMIUM_PATH } } : {};
+// Câmera falsa (vídeo com um QR Code) para testar o leitor da portaria.
+const fakeCamera = writeFakeCamera();
+const chromium = {
+  launchOptions: {
+    ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+    args: [
+      "--use-fake-device-for-media-stream",
+      "--use-fake-ui-for-media-stream",
+      `--use-file-for-fake-video-capture=${fakeCamera}`,
+    ],
+  },
+};
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -20,9 +32,7 @@ export default defineConfig({
   timeout: 60_000,
   globalSetup: "./tests/e2e/global-setup.ts",
   use: { baseURL: APP_URL, trace: "retain-on-failure", ...chromium },
-  projects: [
-    { name: "celular", use: { ...devices["Pixel 7"], ...chromium } },
-  ],
+  projects: [{ name: "celular", use: { ...devices["Pixel 7"], ...chromium } }],
   webServer: [
     {
       command: `node tests/mock-mp/server.mjs`,

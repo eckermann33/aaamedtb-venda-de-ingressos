@@ -149,6 +149,7 @@ export type ListRow = {
   ticket_code: string | null;
   created_at: Date;
   confirmed_at: Date | null;
+  checked_in_at: Date | null;
 };
 
 function likePattern(term: string): string {
@@ -164,13 +165,7 @@ export async function listPurchases(sql: Sql, f: ListFilters): Promise<{ rows: L
     WHERE true
     ${term ? sql`AND name_search LIKE ${likePattern(term)}` : sql``}
     ${f.category ? sql`AND category_id = ${f.category}` : sql``}
-    ${
-      f.status === "attention"
-        ? sql`AND attention IS NOT NULL`
-        : f.status
-          ? sql`AND status = ${f.status}`
-          : sql``
-    }
+    ${f.status === "attention" ? sql`AND attention IS NOT NULL` : f.status ? sql`AND status = ${f.status}` : sql``}
   `;
   const direction = f.dir === "asc" ? sql`ASC` : sql`DESC`;
   const order =
@@ -183,7 +178,7 @@ export async function listPurchases(sql: Sql, f: ListFilters): Promise<{ rows: L
   const [{ total }] = await sql<{ total: number }[]>`SELECT count(*)::int AS total FROM purchases ${where}`;
   const rows = await sql<ListRow[]>`
     SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, athletic, camarote_extra_cents, note, lead_id,
-           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at
+           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at, checked_in_at
     FROM purchases ${where}
     ORDER BY ${order}
     LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
@@ -214,7 +209,7 @@ export async function officialList(sql: Sql): Promise<OfficialRow[]> {
 export async function allPurchases(sql: Sql): Promise<ListRow[]> {
   return sql<ListRow[]>`
     SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, athletic, camarote_extra_cents, note, lead_id,
-           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at
+           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at, checked_in_at
     FROM purchases
     ORDER BY created_at ASC, full_name ASC
   `;

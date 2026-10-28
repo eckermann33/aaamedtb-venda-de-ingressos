@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { MAX_TICKETS_PER_ORDER, PAYMENT_WINDOW_MINUTES, RESERVATION_GRACE_MINUTES } from "@/config/event";
 import { phoneDigits } from "@/lib/contact";
+import { ENTRY_CODE_ALPHABET } from "@/lib/entry-code";
 import { cleanName, searchableName, validateFullName, type PurchaseRequest } from "@/lib/validation";
 import type { Sql, TxSql } from "./db";
 import { errorInfo, logger } from "./logger";
@@ -37,6 +38,10 @@ export type PurchaseRow = {
   confirmed_at: Date | null;
   refunded_at: Date | null;
   attention: string | null;
+  /** Conteúdo do QR Code (modo de entrada por QR Code). */
+  entry_code: string | null;
+  checked_in_at: Date | null;
+  checked_in_by: string | null;
   last_checked_at: Date | null;
   terms_version_id: number;
   terms_accepted_at: Date;
@@ -59,6 +64,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID.test(value);
+}
+
+/** Código de entrada (conteúdo do QR Code): 12 caracteres, ~60 bits aleatórios. */
+export function generateEntryCode(): string {
+  const bytes = randomBytes(12);
+  let out = "";
+  for (const b of bytes) out += ENTRY_CODE_ALPHABET[b % 32];
+  return out;
 }
 
 /** Código interno do ingresso (ex.: INV-7K2M9QXA4C). Não é exibido ao comprador. */
@@ -128,7 +141,11 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
   }));
   const searchKeys = tickets.map((t) => searchableName(t.fullName));
   if (new Set(searchKeys).size !== searchKeys.length) {
-    throw new PurchaseError("duplicate_name", "Há nomes repetidos no pedido. Cada ingresso precisa de uma pessoa diferente.", 400);
+    throw new PurchaseError(
+      "duplicate_name",
+      "Há nomes repetidos no pedido. Cada ingresso precisa de uma pessoa diferente.",
+      400,
+    );
   }
 
   const existing = await findByClientRequestId(sql, input.clientRequestId);
@@ -202,7 +219,13 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
     const [leadRow] = await insert(priced[0], input.clientRequestId, null);
     if (!leadRow) return null;
     for (const t of priced.slice(1)) await insert(t, randomUUID(), leadRow.id);
-    return { lead: leadRow, priced, eventName: settings.event.name, statementDescriptor: settings.event.statementDescriptor, fee: settings.serviceFeeCents };
+    return {
+      lead: leadRow,
+      priced,
+      eventName: settings.event.name,
+      statementDescriptor: settings.event.statementDescriptor,
+      fee: settings.serviceFeeCents,
+    };
   });
 
   if (!created) {
@@ -241,7 +264,12 @@ export async function createPurchase(deps: CreateDeps, input: PurchaseRequest): 
   }
   const items = [...byCategory.values()];
   if (created.fee > 0) {
-    items.push({ id: "taxa-servico", title: "Taxa de serviço", quantity: created.priced.length, unitPriceCents: created.fee });
+    items.push({
+      id: "taxa-servico",
+      title: "Taxa de serviço",
+      quantity: created.priced.length,
+      unitPriceCents: created.fee,
+    });
   }
 
   try {
@@ -313,7 +341,10 @@ export async function getOrderTickets(sql: Sql | TxSql, leadId: string): Promise
 }
 
 /** Pedido online (linha principal + ingressos), ou null se o id não for de um pedido online. */
-export async function getOrder(sql: Sql | TxSql, id: string): Promise<{ lead: PurchaseRow; tickets: PurchaseRow[] } | null> {
+export async function getOrder(
+  sql: Sql | TxSql,
+  id: string,
+): Promise<{ lead: PurchaseRow; tickets: PurchaseRow[] } | null> {
   const lead = await getPurchase(sql, id);
   if (!lead || lead.lead_id !== null || lead.source !== "online") return null;
   return { lead, tickets: await getOrderTickets(sql, lead.id) };
@@ -417,6 +448,7 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
               payment_status_detail = ${payment.status_detail ?? null},
               mp_payment_id = ${t.id === purchase.id ? paymentId : null},
               ticket_code = ${generateTicketCode()},
+              entry_code = coalesce(entry_code, ${generateEntryCode()}),
               confirmed_at = ${confirmedAt},
               attention = CASE WHEN attention IN ('over_capacity', 'amount_mismatch') THEN NULL ELSE attention END,
               updated_at = now()
@@ -531,7 +563,11 @@ export async function reconcilePurchase(
   try {
     // Uma compra pode ter várias tentativas de pagamento: busca todas pela referência externa.
     const payments: MpPayment[] = await mp.searchPaymentsByReference(purchase.id);
-    if (opts.hintPaymentId && /^\d{1,20}$/.test(opts.hintPaymentId) && !payments.some((p) => String(p.id) === opts.hintPaymentId)) {
+    if (
+      opts.hintPaymentId &&
+      /^\d{1,20}$/.test(opts.hintPaymentId) &&
+      !payments.some((p) => String(p.id) === opts.hintPaymentId)
+    ) {
       const hinted = await mp.getPayment(opts.hintPaymentId);
       if (hinted.external_reference === purchase.id) payments.push(hinted);
     }
@@ -574,7 +610,13 @@ export type PublicState =
   | "failed"
   | "attention";
 
-export type PublicTicket = { fullName: string; categoryLabel: string; ticketPriceCents: number };
+export type PublicTicket = {
+  fullName: string;
+  categoryLabel: string;
+  ticketPriceCents: number;
+  /** Só no modo de entrada por QR Code e com o ingresso confirmado. */
+  entryCode: string | null;
+};
 
 export type PublicPurchase = {
   id: string;
@@ -619,8 +661,15 @@ export function publicState(p: PurchaseRow, now = new Date()): PublicState {
   }
 }
 
-/** `order` = todos os ingressos do pedido (a linha principal primeiro). */
-export function toPublic(p: PurchaseRow, order: PurchaseRow[] = [p]): PublicPurchase {
+/**
+ * `order` = todos os ingressos do pedido (a linha principal primeiro).
+ * `showEntry` = modo de entrada por QR Code: inclui o código de cada ingresso confirmado.
+ */
+export function toPublic(
+  p: PurchaseRow,
+  order: PurchaseRow[] = [p],
+  opts: { showEntry?: boolean } = {},
+): PublicPurchase {
   const state = publicState(p);
   const awaiting = state === "awaiting_payment" || state === "payment_rejected";
   const sum = (f: (t: PurchaseRow) => number) => order.reduce((n, t) => n + f(t), 0);
@@ -632,6 +681,7 @@ export function toPublic(p: PurchaseRow, order: PurchaseRow[] = [p]): PublicPurc
       fullName: t.full_name,
       categoryLabel: t.category_label,
       ticketPriceCents: t.ticket_price_cents,
+      entryCode: opts.showEntry && t.status === "confirmed" ? t.entry_code : null,
     })),
     ticketPriceCents: sum((t) => t.ticket_price_cents),
     feeCents: sum((t) => t.fee_cents),
@@ -677,7 +727,9 @@ export async function transferPurchase(sql: Sql, id: string, newName: string): P
   if (error) throw new PurchaseError("invalid_name", error, 400);
   const name = cleanName(newName);
   const rows = await sql<PurchaseRow[]>`
-    UPDATE purchases SET full_name = ${name}, name_search = ${searchableName(name)}, updated_at = now()
+    UPDATE purchases SET full_name = ${name}, name_search = ${searchableName(name)},
+      -- Novo QR Code: o da pessoa anterior deixa de valer na portaria.
+      entry_code = ${generateEntryCode()}, updated_at = now()
     WHERE id = ${id} AND status = 'confirmed' AND anonymized_at IS NULL
     RETURNING *
   `;
@@ -746,9 +798,16 @@ export async function createManualTickets(sql: Sql, input: ManualTicketsInput): 
   }
   const phone = input.phone && input.phone.trim() ? phoneDigits(input.phone) : null;
   if (input.phone && input.phone.trim() && !phone) {
-    throw new PurchaseError("invalid_phone", "Celular inválido. Informe com DDD, só números (ou deixe em branco).", 400);
+    throw new PurchaseError(
+      "invalid_phone",
+      "Celular inválido. Informe com DDD, só números (ou deixe em branco).",
+      400,
+    );
   }
-  if (input.priceCents !== null && (!Number.isInteger(input.priceCents) || input.priceCents < 0 || input.priceCents > 100_000)) {
+  if (
+    input.priceCents !== null &&
+    (!Number.isInteger(input.priceCents) || input.priceCents < 0 || input.priceCents > 100_000)
+  ) {
     throw new PurchaseError("invalid_price", "Valor inválido.", 400);
   }
   const note = input.note?.trim() ? input.note.trim().slice(0, 200) : null;
@@ -776,11 +835,11 @@ export async function createManualTickets(sql: Sql, input: ManualTicketsInput): 
         INSERT INTO purchases (
           client_request_id, full_name, name_search, buyer_phone, category_id, category_label,
           ticket_price_cents, fee_cents, amount_cents, payment_method, source, note, athletic, status,
-          adult_confirmed, terms_version_id, terms_accepted_at, ticket_code, expires_at, confirmed_at
+          adult_confirmed, terms_version_id, terms_accepted_at, ticket_code, entry_code, expires_at, confirmed_at
         ) VALUES (
           ${randomUUID()}, ${name}, ${searchableName(name)}, ${phone}, ${category.id}, ${input.label ?? category.label},
           ${price}, 0, ${price}, 'manual', 'manual', ${note}, ${input.athletic === true}, 'confirmed',
-          true, ${settings.termsVersionId}, now(), ${generateTicketCode()}, now(), now()
+          true, ${settings.termsVersionId}, now(), ${generateTicketCode()}, ${generateEntryCode()}, now(), now()
         )
         RETURNING *
       `;
@@ -797,7 +856,8 @@ export async function cancelManualTicket(sql: Sql, id: string): Promise<Purchase
     WHERE id = ${id} AND source = 'manual' AND status = 'confirmed'
     RETURNING *
   `;
-  if (!rows[0]) throw new PurchaseError("not_cancellable", "Só ingressos manuais confirmados podem ser removidos.", 409);
+  if (!rows[0])
+    throw new PurchaseError("not_cancellable", "Só ingressos manuais confirmados podem ser removidos.", 409);
   return rows[0];
 }
 
@@ -818,8 +878,15 @@ export async function addCamarote(sql: Sql, id: string, priceCents: number | nul
   }
   let price = priceCents;
   if (price === null) {
-    const [cat] = await sql<{ price_cents: number }[]>`SELECT price_cents FROM ticket_categories WHERE id = ${CAMAROTE_CATEGORY}`;
-    if (!cat) throw new PurchaseError("no_camarote_price", "Informe o valor do camarote (a categoria camarote não existe).", 400);
+    const [cat] = await sql<
+      { price_cents: number }[]
+    >`SELECT price_cents FROM ticket_categories WHERE id = ${CAMAROTE_CATEGORY}`;
+    if (!cat)
+      throw new PurchaseError(
+        "no_camarote_price",
+        "Informe o valor do camarote (a categoria camarote não existe).",
+        400,
+      );
     price = cat.price_cents;
   }
   const rows = await sql<PurchaseRow[]>`
@@ -829,7 +896,11 @@ export async function addCamarote(sql: Sql, id: string, priceCents: number | nul
     RETURNING *
   `;
   if (!rows[0]) {
-    throw new PurchaseError("not_applicable", "Só ingressos confirmados que ainda não têm camarote aceitam o adicional.", 409);
+    throw new PurchaseError(
+      "not_applicable",
+      "Só ingressos confirmados que ainda não têm camarote aceitam o adicional.",
+      409,
+    );
   }
   return rows[0];
 }
@@ -843,7 +914,8 @@ export async function removeCamarote(sql: Sql, id: string): Promise<PurchaseRow>
     WHERE id = ${id} AND camarote AND camarote_extra_cents IS NOT NULL
     RETURNING *
   `;
-  if (!rows[0]) throw new PurchaseError("not_applicable", "Este ingresso não tem camarote adicionado pelo painel.", 409);
+  if (!rows[0])
+    throw new PurchaseError("not_applicable", "Este ingresso não tem camarote adicionado pelo painel.", 409);
   return rows[0];
 }
 
@@ -854,7 +926,8 @@ export async function setAthletic(sql: Sql, id: string, athletic: boolean): Prom
     WHERE id = ${id} AND status = 'confirmed'
     RETURNING *
   `;
-  if (!rows[0]) throw new PurchaseError("not_applicable", "Só ingressos confirmados podem ser marcados como Atlética.", 409);
+  if (!rows[0])
+    throw new PurchaseError("not_applicable", "Só ingressos confirmados podem ser marcados como Atlética.", 409);
   return rows[0];
 }
 
@@ -865,7 +938,8 @@ export async function setAthletic(sql: Sql, id: string, athletic: boolean): Prom
 export async function createAthleticTickets(sql: Sql, names: string[]): Promise<PurchaseRow[]> {
   // O banco exige uma categoria; usa a primeira, mas o rótulo da lista é "Atlética".
   const [cat] = await sql<{ id: string }[]>`SELECT id FROM ticket_categories ORDER BY sort_order, id LIMIT 1`;
-  if (!cat) throw new PurchaseError("invalid_category", "Cadastre uma categoria de ingresso em Configurações primeiro.", 409);
+  if (!cat)
+    throw new PurchaseError("invalid_category", "Cadastre uma categoria de ingresso em Configurações primeiro.", 409);
   return createManualTickets(sql, {
     names,
     categoryId: cat.id,

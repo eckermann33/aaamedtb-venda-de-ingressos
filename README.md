@@ -317,6 +317,22 @@ Guarde o arquivo em local privado (ele contém nomes de participantes). A Railwa
 
 ---
 
+### 8.1. Entrada por QR Code (opcional)
+
+Painel → **Portaria** → escolha o modelo de entrada. Dá para trocar quando quiser; os ingressos já vendidos valem nos dois modelos.
+
+- **Lista impressa** (padrão, o modelo da Party do Saco Cheio): nada muda, a portaria confere o nome no papel.
+- **QR Code na portaria**: defina o **código de acesso da portaria** (botão "Gerar código"; anote, ele só aparece na hora) e salve. A partir daí:
+  - cada ingresso aprovado mostra um **QR Code** na tela de confirmação do pedido (um por pessoa, com o código escrito embaixo e um link "Abrir só este ingresso" para mandar a quem vai usar);
+  - a equipe da entrada abre **`/portaria`** no celular, informa o próprio nome (ex.: "Segurança 1") e o código da portaria. Ela só tem acesso ao leitor, nada do painel;
+  - o leitor usa a câmera: ao ler um QR, mostra o **nome em letras grandes** (e as etiquetas CAMAROTE/ATLÉTICA) para conferir com o documento; a entrada só é registrada quando a pessoa toca em **Confirmar entrada**. O mesmo QR lido de novo aparece como **JÁ ENTROU** (com horário e quem confirmou). Se a câmera falhar, dá para digitar o código;
+  - ingressos manuais e da Atlética também têm QR: abra a compra no painel e use **Copiar link** / **Enviar pelo WhatsApp** no bloco "Ingresso com QR Code";
+  - na **transferência**, o QR antigo deixa de valer e um novo é gerado (envie o novo link);
+  - painel → Portaria mostra quantos entraram e as últimas entradas, com **Desfazer entrada** para engano;
+  - trocar o código ou voltar para a lista impressa **desconecta** todos os leitores abertos.
+- Mesmo no modo QR Code, **imprima a lista de entrada como reserva**: o leitor precisa de internet.
+- O conteúdo do QR é um código próprio de cada ingresso (≈60 bits aleatórios), diferente do "código interno" que aparece na lista impressa e no CSV, então quem tem a lista não consegue forjar um QR.
+
 ## 9. Serviços externos e custos
 
 Valores **de referência — confirme nos sites oficiais**, pois mudam com frequência e eu não consegui acessá-los deste ambiente:

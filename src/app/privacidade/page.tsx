@@ -40,9 +40,10 @@ export default async function PrivacyPage() {
 
           <h2>Quais dados coletamos</h2>
           <ul>
-            <li>Nome completo — para montar a lista oficial de entrada.</li>
+            <li>Nome completo — para montar a lista oficial de entrada e conferir o ingresso na portaria.</li>
             <li>Celular/WhatsApp — somente para avisos sobre o evento (por exemplo, cancelamento) e transferências.</li>
             <li>Categoria do ingresso, valores pagos e datas da compra.</li>
+            <li>Data e hora da entrada no evento, quando o ingresso é conferido por QR Code na portaria.</li>
             <li>Confirmação de maioridade e registro do aceite das regras (versão, data e hora).</li>
             <li>
               Identificador e situação do pagamento informados pelo Mercado Pago. Não recebemos nem armazenamos dados de
@@ -51,8 +52,8 @@ export default async function PrivacyPage() {
           </ul>
           <p>
             Não pedimos CPF, endereço nem data de nascimento. Os dados digitados no ambiente do Mercado Pago (como
-            e-mail, CPF ou cartão) são tratados por ele e <strong>não chegam à Atlética</strong>. Para limitar
-            abusos, usamos temporariamente uma versão cifrada (hash) do endereço IP, descartada em até 24 horas.
+            e-mail, CPF ou cartão) são tratados por ele e <strong>não chegam à Atlética</strong>. Para limitar abusos,
+            usamos temporariamente uma versão cifrada (hash) do endereço IP, descartada em até 24 horas.
           </p>
 
           <h2>Para que usamos</h2>
@@ -70,9 +71,9 @@ export default async function PrivacyPage() {
 
           <h2>Por quanto tempo guardamos</h2>
           <p>
-            Os nomes dos participantes são anonimizados em até {e.retentionDays} dias após o evento. Registros financeiros
-            sem identificação pessoal (valores, datas e identificadores de pagamento) podem ser mantidos pelo prazo exigido
-            pela legislação contábil e fiscal.
+            Os nomes dos participantes são anonimizados em até {e.retentionDays} dias após o evento. Registros
+            financeiros sem identificação pessoal (valores, datas e identificadores de pagamento) podem ser mantidos
+            pelo prazo exigido pela legislação contábil e fiscal.
           </p>
 
           <h2>Cookies</h2>
@@ -83,8 +84,8 @@ export default async function PrivacyPage() {
 
           <h2>Seus direitos</h2>
           <p>
-            Você pode pedir confirmação, acesso, correção ou eliminação dos seus dados, entre outros direitos do art. 18 da
-            LGPD, pelo contato acima. Pedidos de eliminação podem impedir a sua entrada se feitos antes do evento.
+            Você pode pedir confirmação, acesso, correção ou eliminação dos seus dados, entre outros direitos do art. 18
+            da LGPD, pelo contato acima. Pedidos de eliminação podem impedir a sua entrada se feitos antes do evento.
           </p>
         </article>
       </main>

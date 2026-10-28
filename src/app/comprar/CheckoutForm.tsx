@@ -19,6 +19,7 @@ type Props = {
   terms: TermsContent;
   eventName: string;
   maxTickets: number;
+  entryMode: "list" | "qrcode";
 };
 
 type Extra = { key: string; name: string; categoryId: string; camarote: boolean };
@@ -27,10 +28,7 @@ const CAMAROTE = "camarote";
 
 /** Chave para detectar nomes repetidos no mesmo pedido (sem acento e sem maiúsculas). */
 function searchKey(raw: string): string {
-  return cleanName(raw)
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
+  return cleanName(raw).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
 function remember(id: string) {
@@ -43,7 +41,16 @@ function remember(id: string) {
   }
 }
 
-export default function CheckoutForm({ categories, feeCents, preselected, termsVersionId, terms, maxTickets }: Props) {
+export default function CheckoutForm({
+  categories,
+  feeCents,
+  preselected,
+  termsVersionId,
+  terms,
+  maxTickets,
+  entryMode,
+}: Props) {
+  const qr = entryMode === "qrcode";
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
@@ -87,7 +94,10 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
             {
               key: crypto.randomUUID(),
               name: "",
-              categoryId: categoryId && categoryId !== CAMAROTE ? categoryId : (categories.find((c) => c.id !== CAMAROTE)?.id ?? ""),
+              categoryId:
+                categoryId && categoryId !== CAMAROTE
+                  ? categoryId
+                  : (categories.find((c) => c.id !== CAMAROTE)?.id ?? ""),
               camarote: false,
             },
           ],
@@ -205,7 +215,9 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
               aria-describedby="h-name e-name"
             />
             <span className="hint" id="h-name">
-              É por esse nome que você entra: ele vai para a lista oficial da portaria.
+              {qr
+                ? "É o nome do seu ingresso: na portaria, ele precisa ser igual ao do documento."
+                : "É por esse nome que você entra: ele vai para a lista oficial da portaria."}
             </span>
             {errors.name && (
               <span className="field-error" id="e-name" role="alert">
@@ -313,16 +325,16 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
                   Remover
                 </button>
               </div>
-                {camaroteCategory && x.categoryId !== CAMAROTE && (
-                  <label className="checkbox" style={{ marginTop: 10 }}>
-                    <input
-                      type="checkbox"
-                      checked={x.camarote}
-                      onChange={(e) => updateExtra(x.key, { camarote: e.target.checked })}
-                    />
-                    <span>Camarote junto (+ {formatBRL(camaroteCategory.priceCents)})</span>
-                  </label>
-                )}
+              {camaroteCategory && x.categoryId !== CAMAROTE && (
+                <label className="checkbox" style={{ marginTop: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={x.camarote}
+                    onChange={(e) => updateExtra(x.key, { camarote: e.target.checked })}
+                  />
+                  <span>Camarote junto (+ {formatBRL(camaroteCategory.priceCents)})</span>
+                </label>
+              )}
               {errors[`extra${i}`] && (
                 <span className="field-error" id={`e-extra${i}`} role="alert">
                   {errors[`extra${i}`]}
@@ -396,7 +408,13 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           )}
 
           <button type="submit" className="btn btn-lg btn-block" style={{ marginTop: 8 }}>
-            Continuar {category && <>· {count > 1 && <>{count} ingressos · </>}{formatBRL(total)}</>}
+            Continuar{" "}
+            {category && (
+              <>
+                · {count > 1 && <>{count} ingressos · </>}
+                {formatBRL(total)}
+              </>
+            )}
           </button>
         </form>
       )}
@@ -409,7 +427,7 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           <dl className="summary">
             {lines.map((l, i) => (
               <div key={i}>
-                <dt>{count > 1 ? `Ingresso ${i + 1}` : "Nome na lista"}</dt>
+                <dt>{count > 1 ? `Ingresso ${i + 1}` : qr ? "Nome no ingresso" : "Nome na lista"}</dt>
                 <dd>
                   {l.name}
                   {count > 1 && l.category && (
@@ -454,8 +472,12 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
           <div className="notice" style={{ marginBottom: 18 }}>
             <IconCheck size={20} />
             <span>
-              {count > 1 ? "Cada ingresso é individual e nominal." : "Ingresso individual e nominal."} Entrada só para maiores de 18 anos, com documento oficial com foto.{" "}
-              {categories.some((c) => c.id === "camarote") ? "Camarote é uma categoria própria de ingresso." : "O camarote é vendido à parte, na entrada."} Sem cobranças além do total acima.
+              {count > 1 ? "Cada ingresso é individual e nominal." : "Ingresso individual e nominal."} Entrada só para
+              maiores de 18 anos, com documento oficial com foto.{" "}
+              {categories.some((c) => c.id === "camarote")
+                ? "Camarote é uma categoria própria de ingresso."
+                : "O camarote é vendido à parte, na entrada."}{" "}
+              Sem cobranças além do total acima.
             </span>
           </div>
 
@@ -463,7 +485,13 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
             <legend>Forma de pagamento</legend>
             <div className="pay-methods">
               <label className="choice">
-                <input type="radio" name="method" value="pix" checked={method === "pix"} onChange={() => setMethod("pix")} />
+                <input
+                  type="radio"
+                  name="method"
+                  value="pix"
+                  checked={method === "pix"}
+                  onChange={() => setMethod("pix")}
+                />
                 <span className="choice-body">
                   <span className="choice-title">
                     <IconPix size={20} /> Pix
@@ -501,7 +529,9 @@ export default function CheckoutForm({ categories, feeCents, preselected, termsV
               {method === "pix"
                 ? "Você será levado ao ambiente seguro do Mercado Pago, onde aparece o QR Code do Pix e o código copia e cola."
                 : "Você será levado ao ambiente seguro do Mercado Pago para digitar os dados do cartão. Nós não vemos nem guardamos os dados do seu cartão."}{" "}
-              Depois do pagamento, você volta para cá e seu nome entra na lista.
+              {qr
+                ? "Depois do pagamento, você volta para cá e recebe o ingresso com QR Code."
+                : "Depois do pagamento, você volta para cá e seu nome entra na lista."}
             </span>
           </div>
 

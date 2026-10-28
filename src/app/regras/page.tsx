@@ -9,13 +9,21 @@ import { loadSettings } from "@/server/settings";
 export const metadata: Metadata = { title: "Regras e políticas" };
 
 function Policy({ text }: { text: string | null }) {
-  return text ? <p className="policy" style={{ color: "var(--text)" }}>{text}</p> : <p className="pending-value">Ainda não definida pela organização.</p>;
+  return text ? (
+    <p className="policy" style={{ color: "var(--text)" }}>
+      {text}
+    </p>
+  ) : (
+    <p className="pending-value">Ainda não definida pela organização.</p>
+  );
 }
 
 export default async function RulesPage() {
   const sql = getSql();
   const s = await loadSettings(sql);
-  const [version] = await sql<{ created_at: Date }[]>`SELECT created_at FROM terms_versions WHERE id = ${s.termsVersionId}`;
+  const [version] = await sql<
+    { created_at: Date }[]
+  >`SELECT created_at FROM terms_versions WHERE id = ${s.termsVersionId}`;
   return (
     <>
       <Satin />
@@ -39,12 +47,25 @@ export default async function RulesPage() {
           <h2>Maioridade</h2>
           <p>Na compra, o participante declara: “{AGE_TEXT}”</p>
 
-          <h2>Ingresso nominal e lista de entrada</h2>
-          <p>
-            Cada compra corresponde a um ingresso individual, em nome da pessoa informada. Não enviamos ingresso por
-            e-mail, SMS ou WhatsApp: a entrada é feita pela lista oficial, que inclui somente compras com pagamento
-            aprovado.
-          </p>
+          {s.entryMode === "qrcode" ? (
+            <>
+              <h2>Ingresso nominal com QR Code</h2>
+              <p>
+                Cada ingresso é individual, em nome da pessoa informada. Depois que o pagamento é aprovado, o ingresso
+                com QR Code aparece na tela de confirmação. Na portaria, o QR Code é lido e o nome é conferido com um
+                documento oficial com foto. Cada QR Code vale para uma única entrada: não compartilhe o seu.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2>Ingresso nominal e lista de entrada</h2>
+              <p>
+                Cada compra corresponde a um ingresso individual, em nome da pessoa informada. Não enviamos ingresso por
+                e-mail, SMS ou WhatsApp: a entrada é feita pela lista oficial, que inclui somente compras com pagamento
+                aprovado.
+              </p>
+            </>
+          )}
 
           <h2>Valores e taxa de serviço</h2>
           <p>

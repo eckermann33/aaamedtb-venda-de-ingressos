@@ -5,8 +5,19 @@ import { formatPhone } from "@/lib/contact";
 import { formatDateTime } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
 import { getSql } from "@/server/db";
+import { env } from "@/server/env";
+import { getEntryMode } from "@/server/settings";
 import { getOrderTickets, getPurchase, isUuid } from "@/server/purchases";
-import { AnonymizeButton, AthleticToggle, CamaroteForm, CancelManualButton, RefundButton, TransferForm } from "../../actions";
+import {
+  AnonymizeButton,
+  AthleticToggle,
+  CamaroteForm,
+  TicketLinkBox,
+  UndoCheckInButton,
+  CancelManualButton,
+  RefundButton,
+  TransferForm,
+} from "../../actions";
 
 export default async function PurchaseDetail(props: PageProps<"/admin/compras/[id]">) {
   const { id } = await props.params;
@@ -15,14 +26,28 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
   const p = await getPurchase(sql, id);
   if (!p) notFound();
   const payments = await sql<
-    { mp_payment_id: string; status: string; status_detail: string | null; amount_cents: number | null; payment_method_id: string | null; live_mode: boolean | null; validation_error: string | null; updated_at: Date }[]
+    {
+      mp_payment_id: string;
+      status: string;
+      status_detail: string | null;
+      amount_cents: number | null;
+      payment_method_id: string | null;
+      live_mode: boolean | null;
+      validation_error: string | null;
+      updated_at: Date;
+    }[]
   >`SELECT mp_payment_id, status, status_detail, amount_cents, payment_method_id, live_mode, validation_error, updated_at
     FROM payments WHERE purchase_id = ${id} ORDER BY created_at`;
-  const [terms] = await sql<{ created_at: Date }[]>`SELECT created_at FROM terms_versions WHERE id = ${p.terms_version_id}`;
+  const [terms] = await sql<
+    { created_at: Date }[]
+  >`SELECT created_at FROM terms_versions WHERE id = ${p.terms_version_id}`;
   const row = p;
   const manual = p.source === "manual";
-  const [camaroteCat] = await sql<{ price_cents: number }[]>`SELECT price_cents FROM ticket_categories WHERE id = 'camarote'`;
+  const [camaroteCat] = await sql<
+    { price_cents: number }[]
+  >`SELECT price_cents FROM ticket_categories WHERE id = 'camarote'`;
   const camaroteDefault = camaroteCat?.price_cents ?? 3000;
+  const qrMode = (await getEntryMode(sql)) === "qrcode";
   // Pedido com vários ingressos: o pagamento e o estorno ficam na linha principal.
   const orderLeadId = p.lead_id ?? p.id;
   const order = manual ? [] : await getOrderTickets(sql, orderLeadId);
@@ -34,7 +59,8 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
       </p>
       <h1 className="admin-title">{p.full_name}</h1>
       <p className="admin-sub">
-        <StatusBadge status={p.status} /> {p.attention && <span className="badge badge-warn">⚠ {ATTENTION_LABEL[p.attention]}</span>}
+        <StatusBadge status={p.status} />{" "}
+        {p.attention && <span className="badge badge-warn">⚠ {ATTENTION_LABEL[p.attention]}</span>}
       </p>
 
       {p.lead_id && (
@@ -52,8 +78,8 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
           <ul className="checklist" style={{ gap: 8 }}>
             {order.map((t) => (
               <li key={t.id} style={{ display: "block" }}>
-                <Link href={`/admin/compras/${t.id}`}>{t.full_name}</Link> · {t.category_label} · {formatBRL(t.amount_cents)}{" "}
-                <StatusBadge status={t.status} />
+                <Link href={`/admin/compras/${t.id}`}>{t.full_name}</Link> · {t.category_label} ·{" "}
+                {formatBRL(t.amount_cents)} <StatusBadge status={t.status} />
               </li>
             ))}
           </ul>
@@ -76,22 +102,64 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
                 )}
               </dd>
             </div>
-            <div><dt>Categoria</dt><dd>{p.category_label}</dd></div>
-            <div><dt>Ingresso</dt><dd>{formatBRL(p.ticket_price_cents)}</dd></div>
-            <div><dt>Taxa de serviço</dt><dd>{formatBRL(p.fee_cents)}</dd></div>
-            <div><dt>Total</dt><dd>{formatBRL(p.amount_cents)}</dd></div>
+            <div>
+              <dt>Categoria</dt>
+              <dd>{p.category_label}</dd>
+            </div>
+            <div>
+              <dt>Ingresso</dt>
+              <dd>{formatBRL(p.ticket_price_cents)}</dd>
+            </div>
+            <div>
+              <dt>Taxa de serviço</dt>
+              <dd>{formatBRL(p.fee_cents)}</dd>
+            </div>
+            <div>
+              <dt>Total</dt>
+              <dd>{formatBRL(p.amount_cents)}</dd>
+            </div>
             <div>
               <dt>Forma</dt>
               <dd>{manual ? "Lançamento manual" : p.payment_method === "pix" ? "Pix" : "Cartão (Checkout Pro)"}</dd>
             </div>
-            {p.note && <div><dt>Observação</dt><dd>{p.note}</dd></div>}
-            <div><dt>Código interno</dt><dd>{p.ticket_code ?? "—"}</dd></div>
-            <div><dt>Criada em</dt><dd>{formatDateTime(p.created_at)}</dd></div>
-            <div><dt>Confirmada em</dt><dd>{formatDateTime(p.confirmed_at)}</dd></div>
-            {p.refunded_at && <div><dt>Estornada em</dt><dd>{formatDateTime(p.refunded_at)}</dd></div>}
-            <div><dt>Aceite dos termos</dt><dd>v{row.terms_version_id} ({formatDateTime(terms?.created_at)}) em {formatDateTime(row.terms_accepted_at)}</dd></div>
-            <div><dt>Maioridade</dt><dd>Declarada</dd></div>
-            <div><dt>ID interno</dt><dd style={{ fontSize: "0.8rem" }}>{p.id}</dd></div>
+            {p.note && (
+              <div>
+                <dt>Observação</dt>
+                <dd>{p.note}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Código interno</dt>
+              <dd>{p.ticket_code ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Criada em</dt>
+              <dd>{formatDateTime(p.created_at)}</dd>
+            </div>
+            <div>
+              <dt>Confirmada em</dt>
+              <dd>{formatDateTime(p.confirmed_at)}</dd>
+            </div>
+            {p.refunded_at && (
+              <div>
+                <dt>Estornada em</dt>
+                <dd>{formatDateTime(p.refunded_at)}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Aceite dos termos</dt>
+              <dd>
+                v{row.terms_version_id} ({formatDateTime(terms?.created_at)}) em {formatDateTime(row.terms_accepted_at)}
+              </dd>
+            </div>
+            <div>
+              <dt>Maioridade</dt>
+              <dd>Declarada</dd>
+            </div>
+            <div>
+              <dt>ID interno</dt>
+              <dd style={{ fontSize: "0.8rem" }}>{p.id}</dd>
+            </div>
           </dl>
         </div>
         <div className="panel" style={{ marginTop: 0 }}>
@@ -111,7 +179,11 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
                 {pay.validation_error && <div className="field-error">Divergência: {pay.validation_error}</div>}
                 {pay.status === "approved" && (
                   <div style={{ marginTop: 8 }}>
-                    <RefundButton purchaseId={p.id} mpPaymentId={pay.mp_payment_id} label={formatBRL(pay.amount_cents ?? 0)} />
+                    <RefundButton
+                      purchaseId={p.id}
+                      mpPaymentId={pay.mp_payment_id}
+                      label={formatBRL(pay.amount_cents ?? 0)}
+                    />
                   </div>
                 )}
               </li>
@@ -126,8 +198,28 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
           <p className="hint">
             Troca o nome na lista oficial (ex.: pedido recebido por mensagem). Confirme que a nova pessoa tem 18 anos ou
             mais. O código interno do ingresso continua o mesmo.
+            {qrMode && " O QR Code antigo deixa de valer: envie o novo link (acima) para a nova pessoa."}
           </p>
           <TransferForm purchaseId={p.id} currentName={p.full_name} />
+        </div>
+      )}
+
+      {qrMode && p.status === "confirmed" && p.entry_code && (
+        <div className="panel">
+          <h2>Ingresso com QR Code</h2>
+          {p.checked_in_at ? (
+            <p>
+              <span className="badge badge-ok">Entrou</span> em {formatDateTime(p.checked_in_at)}
+              {p.checked_in_by && <> · {p.checked_in_by}</>} <UndoCheckInButton purchaseId={p.id} name={p.full_name} />
+            </p>
+          ) : (
+            <p className="hint">Ainda não entrou.</p>
+          )}
+          <p className="hint">
+            Link do ingresso desta pessoa (funciona como o próprio ingresso: envie só para quem vai usar). Útil para
+            ingressos manuais, da Atlética ou quando o comprador perdeu a página.
+          </p>
+          <TicketLinkBox url={`${env.appUrl}/ingresso/${p.entry_code}`} phone={p.buyer_phone} name={p.full_name} />
         </div>
       )}
 
@@ -154,7 +246,9 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
       {manual && p.status === "confirmed" && (
         <div className="panel">
           <h2>Remover da lista</h2>
-          <p className="hint">Use se o ingresso foi lançado por engano. A vaga é liberada e o nome sai da lista de entrada.</p>
+          <p className="hint">
+            Use se o ingresso foi lançado por engano. A vaga é liberada e o nome sai da lista de entrada.
+          </p>
           <CancelManualButton purchaseId={p.id} name={p.full_name} />
         </div>
       )}

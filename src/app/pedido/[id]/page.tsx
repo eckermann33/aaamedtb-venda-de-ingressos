@@ -37,7 +37,12 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
             <li className="done">2 · Pagamento</li>
             <li aria-current="step">3 · Confirmação</li>
           </ol>
-          <OrderStatus initial={toPublic(order.lead, order.tickets)} contacts={contactLinks(settings.event)} eventName={settings.event.name} />
+          <OrderStatus
+            initial={toPublic(order.lead, order.tickets, { showEntry: settings.entryMode === "qrcode" })}
+            contacts={contactLinks(settings.event)}
+            eventName={settings.event.name}
+            entryMode={settings.entryMode}
+          />
         </div>
       </main>
       <SiteFooter event={settings.event} />

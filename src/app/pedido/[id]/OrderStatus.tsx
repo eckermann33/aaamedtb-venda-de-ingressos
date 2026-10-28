@@ -13,11 +13,13 @@ import {
   IconRefresh,
   IconX,
 } from "@/components/icons";
+import { TicketQr } from "@/components/TicketQr";
 import type { ContactLink } from "@/lib/contact";
+import type { EntryMode } from "@/lib/entry-code";
 import { formatBRL } from "@/lib/money";
 import type { PublicPurchase } from "@/server/purchases";
 
-type Props = { initial: PublicPurchase; contacts: ContactLink[]; eventName: string };
+type Props = { initial: PublicPurchase; contacts: ContactLink[]; eventName: string; entryMode: EntryMode };
 
 const WAITING = new Set(["preparing", "awaiting_payment", "payment_rejected"]);
 
@@ -34,7 +36,10 @@ function useCountdown(target: string | null) {
   return { ms, label: `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` };
 }
 
-export default function OrderStatus({ initial, contacts, eventName }: Props) {
+export default function OrderStatus({ initial, contacts, eventName, entryMode }: Props) {
+  // Modo QR Code: cada ingresso aprovado tem um QR para mostrar na portaria.
+  const qr = entryMode === "qrcode";
+  const inList = qr ? "seu ingresso não foi gerado" : "seu nome não entrou na lista";
   const [p, setP] = useState(initial);
   const [checking, setChecking] = useState(false);
   const failures = useRef(0);
@@ -87,7 +92,7 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
       ) : (
         <>
           <div>
-            <dt>Nome na lista</dt>
+            <dt>{qr ? "Nome no ingresso" : "Nome na lista"}</dt>
             <dd>{p.fullName}</dd>
           </div>
           <div>
@@ -128,10 +133,46 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
             <IconCheck size={44} />
           </div>
           <h1 className="status-title">Pagamento aprovado!</h1>
-          <p className="status-text">
-            Seu nome já está na <strong>lista oficial de entrada</strong> da {eventName}. Não precisa mostrar
-            comprovante: na portaria, é só dizer seu nome e apresentar um documento oficial com foto.
-          </p>
+          {qr ? (
+            <>
+              <p className="status-text">
+                {p.tickets.length > 1 ? "Seus ingressos estão prontos" : "Seu ingresso está pronto"}. Na portaria,
+                mostre o <strong>QR Code</strong> e um <strong>documento oficial com foto</strong> com o mesmo nome do
+                ingresso.
+              </p>
+              <div className="notice notice-warn" style={{ textAlign: "left" }}>
+                <IconInfo size={20} />
+                <span>
+                  <strong>Tire um print desta tela</strong> ou salve o link de cada ingresso. Cada QR Code vale para uma
+                  entrada só, então não compartilhe com quem não vai usar.
+                </span>
+              </div>
+              <div className="entry-tickets">
+                {p.tickets.map((t, i) =>
+                  t.entryCode ? (
+                    <div className="entry-ticket" key={t.entryCode}>
+                      <h3>{t.fullName}</h3>
+                      <span className="hint">
+                        {t.categoryLabel}
+                        {p.tickets.length > 1 && ` · ingresso ${i + 1} de ${p.tickets.length}`}
+                      </span>
+                      <TicketQr code={t.entryCode} />
+                      <p style={{ margin: "12px 0 0" }}>
+                        <Link href={`/ingresso/${t.entryCode}`} target="_blank">
+                          Abrir só este ingresso{p.tickets.length > 1 ? " (para enviar a quem vai usar)" : ""} →
+                        </Link>
+                      </p>
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="status-text">
+              Seu nome já está na <strong>lista oficial de entrada</strong> da {eventName}. Não precisa mostrar
+              comprovante: na portaria, é só dizer seu nome e apresentar um documento oficial com foto.
+            </p>
+          )}
           {summary}
           <Link className="btn btn-ghost" href="/">
             Voltar para o evento
@@ -158,8 +199,8 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
             <div className="notice notice-danger" role="alert" style={{ marginBottom: 18, textAlign: "left" }}>
               <IconAlert size={20} />
               <span>
-                <strong>O último pagamento não foi concluído</strong> (recusado, cancelado ou expirado). Nenhum valor foi
-                cobrado. Você pode tentar de novo enquanto a reserva estiver válida.
+                <strong>O último pagamento não foi concluído</strong> (recusado, cancelado ou expirado). Nenhum valor
+                foi cobrado. Você pode tentar de novo enquanto a reserva estiver válida.
               </span>
             </div>
           )}
@@ -171,11 +212,14 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
             {p.paymentMethod === "pix"
               ? "Abra o Mercado Pago para ver o QR Code e o Pix copia e cola. "
               : "Conclua o pagamento com cartão no ambiente seguro do Mercado Pago. "}
-            Assim que for aprovado, seu nome entra na lista automaticamente — pode até fechar esta página.
+            {qr
+              ? "Assim que for aprovado, seu ingresso com QR Code aparece aqui. Se fechar esta página, volte pelo mesmo link."
+              : "Assim que for aprovado, seu nome entra na lista automaticamente — pode até fechar esta página."}
           </p>
           {p.checkoutUrl && (
             <a className="btn btn-lg btn-block" href={p.checkoutUrl}>
-              <IconExternal size={20} /> {p.paymentMethod === "pix" ? "Ir para o Pix no Mercado Pago" : "Ir para o Mercado Pago"}
+              <IconExternal size={20} />{" "}
+              {p.paymentMethod === "pix" ? "Ir para o Pix no Mercado Pago" : "Ir para o Mercado Pago"}
             </a>
           )}
           {countdown && countdown.ms > 0 && (
@@ -198,7 +242,8 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
           </div>
           <h1 className="status-title">Pagamento recusado</h1>
           <p className="status-text">
-            O pagamento não foi aprovado e <strong>nenhum valor foi cobrado</strong>. Seu nome não entrou na lista.
+            O pagamento não foi aprovado e <strong>nenhum valor foi cobrado</strong>.{" "}
+            {inList[0].toUpperCase() + inList.slice(1)}.
           </p>
           <Link className="btn btn-lg" href="/comprar">
             Tentar novamente
@@ -230,7 +275,7 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
             <IconBan size={42} />
           </div>
           <h1 className="status-title">Pagamento cancelado</h1>
-          <p className="status-text">Este pagamento foi cancelado e seu nome não está na lista.</p>
+          <p className="status-text">Este pagamento foi cancelado e {inList}.</p>
           <Link className="btn btn-lg" href="/comprar">
             Comprar novamente
           </Link>
@@ -245,7 +290,8 @@ export default function OrderStatus({ initial, contacts, eventName }: Props) {
           </div>
           <h1 className="status-title">Pagamento estornado</h1>
           <p className="status-text">
-            O valor desta compra foi devolvido e o ingresso foi cancelado. Seu nome não está mais na lista. {contact}
+            O valor desta compra foi devolvido e o ingresso foi cancelado
+            {qr ? " (o QR Code não vale mais)" : ". Seu nome não está mais na lista"}. {contact}
           </p>
         </>
       );
