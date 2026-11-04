@@ -12,6 +12,11 @@
 
 export type EventInfo = {
   name: string;
+  /** Título da página inicial em duas partes: linha menor e linha de destaque (ex.: "Chopada" / "Final"). */
+  titleTop?: string | null;
+  titleMain?: string | null;
+  /** Cartaz da festa: arquivo em public/images (ex.: "/images/cartaz-chopada-final.webp"). */
+  poster?: string | null;
   tagline: string;
   organizer: string;
   organizerShort: string;
@@ -44,21 +49,23 @@ export type TermsContent = {
 };
 
 export const DEFAULT_EVENT: EventInfo = {
-  name: "Party do Saco Cheio",
-  tagline: "O semestre não acaba e as festas também não!",
+  name: "Chopada Final da Invictus",
+  titleTop: "Chopada",
+  titleMain: "Final",
+  poster: "/images/cartaz-chopada-final.webp",
+  tagline: "Open chop · Atração confirmada: DJ HS · Mais novidades em breve!",
   organizer: "Associação Atlética Acadêmica de Medicina de Telêmaco Borba — Invictus (A.A.A.MED.TB)",
   organizerShort: "Atlética Invictus",
-  partner: "Santo Gole",
-  date: "2026-10-24",
-  startTime: "23:30",
+  partner: "QG Conveniência",
+  date: "2026-11-21",
+  startTime: null, // PENDENTE
   endTime: null, // PENDENTE (opcional)
-  venueName: "Santo Gole",
-  venueAddress: null, // opcional — endereço não informado
+  venueName: null, // PENDENTE
+  venueAddress: null, // opcional
   ageRating: "Proibido para menores de 18 anos.",
   about:
-    "A festa da Atlética Invictus em parceria com a Santo Gole. A entrada é feita pela lista oficial: depois que o pagamento é aprovado, seu nome completo entra na lista da portaria.",
-  camarote:
-    "O camarote será vendido separadamente na entrada da festa, conforme disponibilidade. A compra do ingresso comum não garante acesso ao camarote.",
+    "A Chopada Final da Invictus tem open chop, atração confirmada DJ HS e organização da QG Conveniência. As pulseiras são limitadas e a venda abre em breve. Mais novidades em breve!",
+  camarote: "", // vazio = a seção de camarote não aparece no site
   contactEmail: null, // opcional
   contactPhone: "42991374203",
   contactInstagram: null, // PENDENTE (opcional)
@@ -73,8 +80,6 @@ export const DEFAULT_TERMS: TermsContent = {
     "É proibida a entrada com bebidas externas.",
     "É proibida a entrada com armas, objetos cortantes, perfurantes ou outros objetos que representem risco à segurança.",
     "Não será permitida a entrada de objetos ou substâncias proibidos pela legislação ou pelas regras de segurança do evento.",
-    "O camarote será vendido separadamente na entrada da festa, conforme disponibilidade.",
-    "A compra do ingresso comum não garante acesso ao camarote.",
     "O ingresso feminino é destinado a pessoas do gênero feminino; na portaria o documento com foto poderá ser conferido.",
     "O descumprimento das regras acima poderá gerar cobrança adicional na entrada da festa.",
   ],

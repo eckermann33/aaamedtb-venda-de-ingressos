@@ -16,7 +16,7 @@ export async function getPublicSettings(sql: Sql): Promise<PublicSettings> {
   if (settings.capacity !== null) {
     const [row] = await sql<{ n: number }[]>`
       SELECT count(*)::int AS n FROM purchases
-      WHERE status = 'confirmed' OR (status = 'pending' AND expires_at > now())
+      WHERE edition = current_edition() AND (status = 'confirmed' OR (status = 'pending' AND expires_at > now()))
     `;
     soldOut = row.n >= settings.capacity;
   }

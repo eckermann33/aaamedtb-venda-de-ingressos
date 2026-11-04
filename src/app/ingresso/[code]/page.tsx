@@ -7,6 +7,7 @@ import { TicketQr } from "@/components/TicketQr";
 import { eventDateParts, formatDateTime } from "@/lib/dates";
 import { normalizeEntryCode } from "@/lib/entry-code";
 import { getSql } from "@/server/db";
+import { archivedEvent } from "@/server/editions";
 import { loadSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "Seu ingresso", robots: { index: false, follow: false } };
@@ -16,6 +17,8 @@ type Row = {
   category_label: string;
   status: string;
   checked_in_at: Date | null;
+  edition: number;
+  current: boolean;
 };
 
 /**
@@ -28,13 +31,15 @@ export default async function TicketPage(props: PageProps<"/ingresso/[code]">) {
   if (!code) notFound();
   const sql = getSql();
   const [row] = await sql<Row[]>`
-    SELECT full_name, category_label, status, checked_in_at FROM purchases WHERE entry_code = ${code}
+    SELECT full_name, category_label, status, checked_in_at, edition, edition = current_edition() AS current
+    FROM purchases WHERE entry_code = ${code}
   `;
   if (!row || row.status === "pending") notFound();
   const settings = await loadSettings(sql);
-  const e = settings.event;
+  // Ingresso de uma festa que já aconteceu: mostra os dados daquela festa, sem QR.
+  const e = row.current ? settings.event : ((await archivedEvent(sql, row.edition)) ?? settings.event);
   const date = eventDateParts(e.date);
-  const valid = row.status === "confirmed";
+  const valid = row.current && row.status === "confirmed";
 
   return (
     <>
@@ -62,7 +67,11 @@ export default async function TicketPage(props: PageProps<"/ingresso/[code]">) {
             {!valid ? (
               <div className="notice notice-danger" style={{ textAlign: "left" }}>
                 <IconInfo size={20} />
-                <span>Este ingresso foi cancelado e não dá direito à entrada.</span>
+                <span>
+                  {row.current
+                    ? "Este ingresso foi cancelado e não dá direito à entrada."
+                    : "Este ingresso é de uma festa que já aconteceu e não vale para a próxima."}
+                </span>
               </div>
             ) : settings.entryMode === "qrcode" ? (
               <>

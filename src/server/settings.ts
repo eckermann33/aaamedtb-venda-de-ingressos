@@ -24,6 +24,8 @@ export type Settings = {
   entryMode: EntryMode;
   /** Se o código de acesso da portaria já foi definido. */
   doorCodeSet: boolean;
+  /** Número da festa atual (sobe a cada "nova festa"; as anteriores ficam guardadas). */
+  edition: number;
   updatedAt: Date;
 };
 
@@ -38,6 +40,7 @@ type SettingsRow = {
   terms_content: TermsContent;
   entry_mode: EntryMode;
   door_code_set: boolean;
+  edition: number;
   updated_at: Date;
 };
 
@@ -70,7 +73,7 @@ export async function loadCategories(sql: Sql | TxSql, onlyActive = false): Prom
 export async function loadSettings(sql: Sql | TxSql, opts: { forUpdate?: boolean } = {}): Promise<Settings> {
   const rows = await sql<SettingsRow[]>`
     SELECT s.event, s.sales_open, s.capacity, s.service_fee_cents, s.current_terms_version_id, s.updated_at,
-           s.entry_mode, s.door_code_hash IS NOT NULL AS door_code_set, t.content AS terms_content
+           s.entry_mode, s.door_code_hash IS NOT NULL AS door_code_set, s.edition, t.content AS terms_content
     FROM settings s
     JOIN terms_versions t ON t.id = s.current_terms_version_id
     WHERE s.id = 1
@@ -90,6 +93,7 @@ export async function loadSettings(sql: Sql | TxSql, opts: { forUpdate?: boolean
     categories: await loadCategories(sql),
     entryMode: row.entry_mode,
     doorCodeSet: row.door_code_set,
+    edition: row.edition,
     updatedAt: row.updated_at,
   };
 }

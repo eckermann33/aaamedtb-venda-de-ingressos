@@ -10,7 +10,7 @@ export default async function AthleticPage() {
   const rows = await sql<Row[]>`
     SELECT id, full_name, status, source, category_label
     FROM purchases
-    WHERE athletic AND status IN ('confirmed', 'pending')
+    WHERE athletic AND status IN ('confirmed', 'pending') AND edition = current_edition()
     ORDER BY name_search
   `;
   return (
@@ -59,7 +59,9 @@ export default async function AthleticPage() {
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <Link href={`/admin/compras/${r.id}`}>Detalhes</Link>{" "}
-                    {r.source === "manual" && r.status === "confirmed" && <CancelManualButton purchaseId={r.id} name={r.full_name} />}
+                    {r.source === "manual" && r.status === "confirmed" && (
+                      <CancelManualButton purchaseId={r.id} name={r.full_name} />
+                    )}
                   </td>
                 </tr>
               ))}

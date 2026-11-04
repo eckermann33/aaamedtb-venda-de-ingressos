@@ -20,7 +20,9 @@ export default async function Dashboard() {
       <p className="admin-sub">Valores calculados somente com pagamentos aprovados e confirmados.</p>
 
       <div className="panel" style={{ marginTop: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <div
+          style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "center" }}
+        >
           <div>
             <h2 style={{ marginBottom: 4 }}>
               Vendas:{" "}
@@ -77,7 +79,9 @@ export default async function Dashboard() {
           <div className="k">Ingressos confirmados</div>
           <div className="v neon">{stats.confirmed}</div>
           <div className="d">
-            na lista oficial{stats.camarotes > 0 && <> · {stats.camarotes} com camarote</>}{stats.athletic > 0 && <> · {stats.athletic} da Atlética</>}{stats.manualConfirmed > 0 && <> · {stats.manualConfirmed} lançado(s) manualmente</>}
+            na lista oficial{stats.camarotes > 0 && <> · {stats.camarotes} com camarote</>}
+            {stats.athletic > 0 && <> · {stats.athletic} da Atlética</>}
+            {stats.manualConfirmed > 0 && <> · {stats.manualConfirmed} lançado(s) manualmente</>}
           </div>
         </div>
         {stats.byCategory.map((c) => (
@@ -96,9 +100,11 @@ export default async function Dashboard() {
           <div className="k">Faturamento bruto confirmado</div>
           <div className="v neon">{formatBRL(stats.grossRevenueCents)}</div>
           <div className="d">
-            Ingressos {formatBRL(stats.ticketRevenueCents)} + taxas {formatBRL(stats.feeRevenueCents)} · antes das tarifas
-            do Mercado Pago
-            {stats.camaroteExtraCents > 0 && <> · + {formatBRL(stats.camaroteExtraCents)} de camarote adicionado pelo painel (fora do Mercado Pago)</>}
+            Ingressos {formatBRL(stats.ticketRevenueCents)} + taxas {formatBRL(stats.feeRevenueCents)} · antes das
+            tarifas do Mercado Pago
+            {stats.camaroteExtraCents > 0 && (
+              <> · + {formatBRL(stats.camaroteExtraCents)} de camarote adicionado pelo painel (fora do Mercado Pago)</>
+            )}
             {stats.manualConfirmed > 0 && <> · inclui {formatBRL(stats.manualRevenueCents)} de ingressos manuais</>}
           </div>
         </div>
@@ -140,6 +146,9 @@ export default async function Dashboard() {
             Baixar todas as compras (CSV)
           </a>
           <ReconcileButton />
+          <Link className="btn btn-ghost btn-sm" href="/admin/nova-festa">
+            Começar nova festa
+          </Link>
         </div>
       </div>
 

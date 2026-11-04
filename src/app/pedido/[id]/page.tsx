@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { contactLinks } from "@/lib/contact";
 import { Satin, SiteFooter, SiteHeader } from "@/components/site";
 import { getSql } from "@/server/db";
 import { getMercadoPago } from "@/server/mercadopago";
 import { getOrder, isUuid, reconcilePurchase, toPublic } from "@/server/purchases";
+import { archivedEvent } from "@/server/editions";
 import { loadSettings } from "@/server/settings";
 import OrderStatus from "./OrderStatus";
 
@@ -25,6 +27,8 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
     order = (await getOrder(sql, id))!;
   }
   const settings = await loadSettings(sql);
+  // Pedido de uma festa que já aconteceu: não mostra QR nem botões de pagamento.
+  const past = order.lead.edition !== settings.edition ? await archivedEvent(sql, order.lead.edition) : null;
 
   return (
     <>
@@ -37,12 +41,24 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
             <li className="done">2 · Pagamento</li>
             <li aria-current="step">3 · Confirmação</li>
           </ol>
-          <OrderStatus
-            initial={toPublic(order.lead, order.tickets, { showEntry: settings.entryMode === "qrcode" })}
-            contacts={contactLinks(settings.event)}
-            eventName={settings.event.name}
-            entryMode={settings.entryMode}
-          />
+          {order.lead.edition !== settings.edition ? (
+            <div className="card status-card">
+              <h1 className="status-title">Festa encerrada</h1>
+              <p className="status-text">
+                Este pedido é da {past?.name ?? "festa anterior"}, que já aconteceu. Ele não vale para a próxima festa.
+              </p>
+              <Link className="btn btn-ghost" href="/">
+                Ver a próxima festa
+              </Link>
+            </div>
+          ) : (
+            <OrderStatus
+              initial={toPublic(order.lead, order.tickets, { showEntry: settings.entryMode === "qrcode" })}
+              contacts={contactLinks(settings.event)}
+              eventName={settings.event.name}
+              entryMode={settings.entryMode}
+            />
+          )}
         </div>
       </main>
       <SiteFooter event={settings.event} />

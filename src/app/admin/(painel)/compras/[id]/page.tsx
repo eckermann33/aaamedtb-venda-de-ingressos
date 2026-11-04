@@ -6,7 +6,7 @@ import { formatDateTime } from "@/lib/dates";
 import { formatBRL } from "@/lib/money";
 import { getSql } from "@/server/db";
 import { env } from "@/server/env";
-import { getEntryMode } from "@/server/settings";
+import { loadSettings } from "@/server/settings";
 import { getOrderTickets, getPurchase, isUuid } from "@/server/purchases";
 import {
   AnonymizeButton,
@@ -47,7 +47,9 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
     { price_cents: number }[]
   >`SELECT price_cents FROM ticket_categories WHERE id = 'camarote'`;
   const camaroteDefault = camaroteCat?.price_cents ?? 3000;
-  const qrMode = (await getEntryMode(sql)) === "qrcode";
+  const current = await loadSettings(sql);
+  const pastEdition = p.edition !== current.edition;
+  const qrMode = current.entryMode === "qrcode" && !pastEdition;
   // Pedido com vários ingressos: o pagamento e o estorno ficam na linha principal.
   const orderLeadId = p.lead_id ?? p.id;
   const order = manual ? [] : await getOrderTickets(sql, orderLeadId);
@@ -60,7 +62,8 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
       <h1 className="admin-title">{p.full_name}</h1>
       <p className="admin-sub">
         <StatusBadge status={p.status} />{" "}
-        {p.attention && <span className="badge badge-warn">⚠ {ATTENTION_LABEL[p.attention]}</span>}
+        {p.attention && <span className="badge badge-warn">⚠ {ATTENTION_LABEL[p.attention]}</span>}{" "}
+        {pastEdition && <span className="badge badge-muted">Festa anterior (nº {p.edition})</span>}
       </p>
 
       {p.lead_id && (

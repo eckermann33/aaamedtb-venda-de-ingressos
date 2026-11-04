@@ -24,7 +24,7 @@ export default async function ManualTicketsPage() {
     getStats(sql),
     sql<ManualRow[]>`
       SELECT id, full_name, category_label, amount_cents, note, status, created_at
-      FROM purchases WHERE source = 'manual' ORDER BY created_at DESC, full_name LIMIT 100
+      FROM purchases WHERE source = 'manual' AND edition = current_edition() ORDER BY created_at DESC, full_name LIMIT 100
     `,
   ]);
 
@@ -46,7 +46,9 @@ export default async function ManualTicketsPage() {
         {categories.length === 0 ? (
           <p className="hint">Nenhuma categoria ativa. Cadastre em Configurações.</p>
         ) : (
-          <ManualTicketsForm categories={categories.map((c) => ({ id: c.id, label: c.label, priceCents: c.priceCents }))} />
+          <ManualTicketsForm
+            categories={categories.map((c) => ({ id: c.id, label: c.label, priceCents: c.priceCents }))}
+          />
         )}
       </div>
 

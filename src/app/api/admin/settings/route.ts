@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { phoneDigits } from "@/lib/contact";
+import { POSTER_PATTERN } from "@/lib/event-display";
 import { audit } from "@/server/audit";
 import { requireAdminApi } from "@/server/auth";
 import { getSql } from "@/server/db";
@@ -18,6 +19,14 @@ const text = (max: number) =>
 const schema = z.object({
   event: z.object({
     name: z.string().trim().min(2).max(80),
+    titleTop: text(40).optional(),
+    titleMain: text(40).optional(),
+    poster: z
+      .string()
+      .regex(POSTER_PATTERN, "Escolha um cartaz da lista")
+      .nullable()
+      .or(z.literal("").transform(() => null))
+      .optional(),
     tagline: z.string().trim().max(160),
     organizer: z.string().trim().min(2).max(200),
     organizerShort: z.string().trim().min(2).max(60),
@@ -42,7 +51,11 @@ const schema = z.object({
     ageRating: z.string().trim().min(2).max(200),
     about: z.string().trim().max(1500),
     camarote: z.string().trim().max(800),
-    contactEmail: z.email().max(254).nullable().or(z.literal("").transform(() => null)),
+    contactEmail: z
+      .email()
+      .max(254)
+      .nullable()
+      .or(z.literal("").transform(() => null)),
     contactPhone: z
       .string()
       .max(30)

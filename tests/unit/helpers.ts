@@ -8,7 +8,7 @@ export const sql = () => getSql();
 /** Deixa o banco limpo e com o evento pronto para vender. */
 export async function resetDb(opts: { capacity?: number | null; salesOpen?: boolean; feeCents?: number } = {}) {
   const db = sql();
-  await db`TRUNCATE payments, purchases, webhook_events, audit_log, rate_limits RESTART IDENTITY CASCADE`;
+  await db`TRUNCATE payments, purchases, webhook_events, audit_log, rate_limits, editions_archive RESTART IDENTITY CASCADE`;
   const [terms] = await db<{ id: number }[]>`
     INSERT INTO terms_versions (content, content_hash)
     VALUES (${db.json({
@@ -23,6 +23,7 @@ export async function resetDb(opts: { capacity?: number | null; salesOpen?: bool
   await db`
     UPDATE settings SET
       sales_open = ${opts.salesOpen ?? true},
+      edition = 1,
       capacity = ${opts.capacity ?? null},
       service_fee_cents = ${opts.feeCents ?? 300},
       current_terms_version_id = ${terms.id},

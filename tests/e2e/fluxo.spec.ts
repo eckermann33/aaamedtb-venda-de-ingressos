@@ -1,5 +1,14 @@
 import { expect, test } from "@playwright/test";
-import { createPurchaseViaApi, db, fillStep1, loginAdmin, mockPayment, mockState, payViaMock, readyEvent } from "./helpers";
+import {
+  createPurchaseViaApi,
+  db,
+  fillStep1,
+  loginAdmin,
+  mockPayment,
+  mockState,
+  payViaMock,
+  readyEvent,
+} from "./helpers";
 
 test.beforeEach(async () => {
   await readyEvent();
@@ -7,10 +16,15 @@ test.beforeEach(async () => {
 
 test("página do evento mostra preços com a taxa e não exibe nomes de participantes", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Party do\s*Saco Cheio/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Chopada\s*Final/i })).toBeVisible();
+  await expect(page.locator(".hero-poster img, .poster-mobile img").first()).toHaveAttribute(
+    "src",
+    "/images/cartaz-chopada-final.webp",
+  );
   await expect(page.getByText("+ R$ 3,00 de taxa de serviço · total R$ 23,00")).toBeVisible();
   await expect(page.getByText("+ R$ 3,00 de taxa de serviço · total R$ 33,00")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Camarote" })).toBeVisible();
+  // Esta festa não tem camarote: a seção não aparece.
+  await expect(page.getByRole("heading", { name: "Camarote" })).toHaveCount(0);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflow).toBe(false);
 });
@@ -31,7 +45,9 @@ test("4/5. formulário bloqueia campos vazios, nome só com espaços e falta de 
   await expect(page.getByText("Confira seu pedido")).toHaveCount(0);
 });
 
-test("1/6/8/11. compra feminina por Pix no Checkout Pro: pendente, webhook repetido e confirmação na tela", async ({ page }) => {
+test("1/6/8/11. compra feminina por Pix no Checkout Pro: pendente, webhook repetido e confirmação na tela", async ({
+  page,
+}) => {
   await fillStep1(page, "Ana Beatriz Moreira", "Feminino");
   await expect(page.locator(".summary")).toContainText("R$ 20,00");
   await expect(page.locator(".summary")).toContainText("(42) 99999-8888");
@@ -138,7 +154,10 @@ test("API recusa mais de 10 ingressos e pedido maior que as vagas restantes", as
     clientRequestId: crypto.randomUUID(),
     fullName: "Pessoa Principal Teste",
     categoryId: "feminino",
-    extraTickets: Array.from({ length: n }, (_, i) => ({ fullName: `Pessoa Extra ${"abcdefghijkl"[i]}`, categoryId: "feminino" })),
+    extraTickets: Array.from({ length: n }, (_, i) => ({
+      fullName: `Pessoa Extra ${"abcdefghijkl"[i]}`,
+      categoryId: "feminino",
+    })),
     adultConfirmed: true,
     termsAccepted: true,
     termsVersionId: settings.t,
@@ -209,7 +228,9 @@ test("10. cartão recusado mostra o estado e não entra na lista", async ({ page
   expect(row).toMatchObject({ status: "pending", payment_status: "rejected" });
 });
 
-test("9. Pix pendente continua aguardando; se o MP cancelar, pode tentar de novo; vencida a reserva, expira", async ({ page }) => {
+test("9. Pix pendente continua aguardando; se o MP cancelar, pode tentar de novo; vencida a reserva, expira", async ({
+  page,
+}) => {
   await fillStep1(page, "Julia Fernandes Rocha", "Feminino");
   await page.getByRole("button", { name: /com Pix/ }).click();
   await page.locator("#pix-gerar").click();
@@ -231,7 +252,8 @@ test("12. comprador fecha o navegador antes da confirmação: webhook confirma m
   await page.getByRole("button", { name: /com Pix/ }).click();
   await page.locator("#pix-gerar").click();
   await expect(page.getByRole("heading", { name: /Aguardando pagamento/ })).toBeVisible();
-  const [p] = await db`SELECT purchases.id, payments.mp_payment_id FROM purchases JOIN payments ON payments.purchase_id = purchases.id`;
+  const [p] =
+    await db`SELECT purchases.id, payments.mp_payment_id FROM purchases JOIN payments ON payments.purchase_id = purchases.id`;
   await ctx.close(); // fechou o navegador
 
   await mockPayment(p.mp_payment_id, { status: "approved" });
@@ -272,7 +294,10 @@ test("13. API ignora preço adulterado e bloqueia requisições de outra origem 
 });
 
 test("webhook com assinatura inválida é recusado, registrado e não confirma a compra", async ({ request, baseURL }) => {
-  const purchase = await createPurchaseViaApi(request, baseURL!, { name: "Rafael Gomes Teixeira", category: "masculino" });
+  const purchase = await createPurchaseViaApi(request, baseURL!, {
+    name: "Rafael Gomes Teixeira",
+    category: "masculino",
+  });
   // O pagamento foi aprovado no Mercado Pago, mas o webhook chega com assinatura forjada.
   const r = await payViaMock(purchase, "approved", { badSignature: true });
   expect(r.webhookStatuses).toEqual([401]);
@@ -379,7 +404,11 @@ test.describe("painel administrativo", () => {
     expect(overflow).toBe(false);
   });
 
-  test("transferência: organização troca o nome e a lista impressa já mostra a nova pessoa", async ({ page, request, baseURL }) => {
+  test("transferência: organização troca o nome e a lista impressa já mostra a nova pessoa", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
     const p = await createPurchaseViaApi(request, baseURL!, { name: "Fernanda Lopes Prado" });
     await payViaMock(p, "approved");
 
@@ -394,7 +423,9 @@ test.describe("painel administrativo", () => {
     await expect(page.locator(".print-list tbody")).not.toContainText("Fernanda");
   });
 
-  test("ingresso manual: organização lança nomes, entram na lista impressa e a remoção libera a vaga", async ({ page }) => {
+  test("ingresso manual: organização lança nomes, entram na lista impressa e a remoção libera a vaga", async ({
+    page,
+  }) => {
     await db`UPDATE settings SET capacity = 3`;
     await loginAdmin(page);
     await page.getByRole("link", { name: "Ingresso manual", exact: true }).first().click();
@@ -404,7 +435,9 @@ test.describe("painel administrativo", () => {
 
     await page.getByLabel("Categoria").selectOption("masculino");
     await expect(page.getByLabel("Valor pago por ingresso (R$)")).toHaveValue("30,00");
-    await page.getByLabel("Nome completo de cada pessoa (um por linha)").fill("Marcos Vinicius Prado\nLuana Ribeiro Costa");
+    await page
+      .getByLabel("Nome completo de cada pessoa (um por linha)")
+      .fill("Marcos Vinicius Prado\nLuana Ribeiro Costa");
     await page.getByLabel("Observação interna (opcional)").fill("Pix direto, vendido pelo Bruno");
     const launch = page.getByRole("button", { name: /Lançar 2 ingresso/ });
     await expect(launch).toBeDisabled(); // falta confirmar a maioridade/pagamento
@@ -412,9 +445,17 @@ test.describe("painel administrativo", () => {
     await launch.click();
     await expect(page.getByText("2 ingresso(s) lançado(s) e já na lista oficial.")).toBeVisible();
 
-    const rows = await db`SELECT full_name, status, source, amount_cents, fee_cents, note, mp_payment_id FROM purchases ORDER BY full_name`;
+    const rows =
+      await db`SELECT full_name, status, source, amount_cents, fee_cents, note, mp_payment_id FROM purchases ORDER BY full_name`;
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ full_name: "Luana Ribeiro Costa", status: "confirmed", source: "manual", amount_cents: 3000, fee_cents: 0, mp_payment_id: null });
+    expect(rows[0]).toMatchObject({
+      full_name: "Luana Ribeiro Costa",
+      status: "confirmed",
+      source: "manual",
+      amount_cents: 3000,
+      fee_cents: 0,
+      mp_payment_id: null,
+    });
     expect(rows[0].note).toBe("Pix direto, vendido pelo Bruno");
     await expect(page.getByText("Vagas livres agora: 1 de 3.")).toBeVisible();
 
@@ -427,7 +468,10 @@ test.describe("painel administrativo", () => {
     expect(resp.status()).toBe(200);
 
     await page.goto("/admin/manual");
-    await page.getByRole("row", { name: /Marcos Vinicius Prado/ }).getByRole("button", { name: "Remover" }).click();
+    await page
+      .getByRole("row", { name: /Marcos Vinicius Prado/ })
+      .getByRole("button", { name: "Remover" })
+      .click();
     await expect(page.getByText("Vagas livres agora: 2 de 3.")).toBeVisible();
     await page.goto("/admin/lista");
     await expect(page.locator(".print-list tbody")).not.toContainText("Marcos Vinicius Prado");
@@ -442,7 +486,14 @@ test.describe("painel administrativo", () => {
   test("ingresso manual: exige login e recusa lotação estourada", async ({ page, request, baseURL }) => {
     const anon = await request.post("/api/admin/manual", {
       headers: { Origin: baseURL! },
-      data: { names: ["Fulano de Tal"], categoryId: "feminino", priceCents: null, phone: null, note: null, adultConfirmed: true },
+      data: {
+        names: ["Fulano de Tal"],
+        categoryId: "feminino",
+        priceCents: null,
+        phone: null,
+        note: null,
+        adultConfirmed: true,
+      },
     });
     expect(anon.status()).toBe(401);
 
@@ -457,7 +508,11 @@ test.describe("painel administrativo", () => {
     expect((await db`SELECT 1 FROM purchases`).length).toBe(0);
   });
 
-  test("camarote pelo painel: organização adiciona ao nome já comprado e a lista impressa mostra", async ({ page, request, baseURL }) => {
+  test("camarote pelo painel: organização adiciona ao nome já comprado e a lista impressa mostra", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
     const p = await createPurchaseViaApi(request, baseURL!, { name: "Isabela Moraes Tavares" });
     await payViaMock(p, "approved");
     await loginAdmin(page);
@@ -467,7 +522,12 @@ test.describe("painel administrativo", () => {
     await page.getByRole("button", { name: "Adicionar camarote" }).click();
     await expect(page.getByText(/já tem camarote/)).toBeVisible();
     const [row] = await db`SELECT amount_cents, camarote, camarote_extra_cents, category_label FROM purchases`;
-    expect(row).toMatchObject({ amount_cents: 2300, camarote: true, camarote_extra_cents: 3000, category_label: "Feminino + Camarote" });
+    expect(row).toMatchObject({
+      amount_cents: 2300,
+      camarote: true,
+      camarote_extra_cents: 3000,
+      category_label: "Feminino + Camarote",
+    });
 
     await page.goto("/admin/lista");
     await expect(page.locator(".print-list tbody")).toContainText("Feminino + Camarote");
@@ -476,7 +536,11 @@ test.describe("painel administrativo", () => {
     await expect(page.getByRole("button", { name: "Adicionar camarote" })).toBeVisible();
   });
 
-  test("Atlética: marcar ingresso e lançar cortesia da diretoria; lista impressa tem seção separada", async ({ page, request, baseURL }) => {
+  test("Atlética: marcar ingresso e lançar cortesia da diretoria; lista impressa tem seção separada", async ({
+    page,
+    request,
+    baseURL,
+  }) => {
     const p = await createPurchaseViaApi(request, baseURL!, { name: "Tesoureira Clara Mendes" });
     await payViaMock(p, "approved");
     await loginAdmin(page);
@@ -512,7 +576,9 @@ test.describe("painel administrativo", () => {
     await loginAdmin(page);
     await page.getByRole("link", { name: "Atlética", exact: true }).first().click();
     await expect(page.getByRole("heading", { name: "Atlética (diretoria)", level: 1 })).toBeVisible();
-    await page.getByLabel("Nome completo de cada pessoa (um por linha)").fill("Presidente Joao Batista\nTesoureira Maria Clara Reis");
+    await page
+      .getByLabel("Nome completo de cada pessoa (um por linha)")
+      .fill("Presidente Joao Batista\nTesoureira Maria Clara Reis");
     const add = page.getByRole("button", { name: /Adicionar 2 à Atlética/ });
     await expect(add).toBeDisabled();
     await page.getByText("Confirmo que todas as pessoas acima têm 18 anos").click();

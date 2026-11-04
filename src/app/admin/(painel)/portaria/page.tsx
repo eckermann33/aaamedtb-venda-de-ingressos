@@ -14,7 +14,7 @@ export default async function DoorAdminPage() {
     entryStats(sql),
     sql<Row[]>`
       SELECT id, full_name, category_label, checked_in_at, checked_in_by
-      FROM purchases WHERE checked_in_at IS NOT NULL
+      FROM purchases WHERE checked_in_at IS NOT NULL AND edition = current_edition()
       ORDER BY checked_in_at DESC LIMIT 50
     `,
   ]);

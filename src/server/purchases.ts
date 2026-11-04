@@ -22,6 +22,8 @@ export type PurchaseRow = {
   amount_cents: number;
   camarote: boolean;
   athletic: boolean;
+  /** Festa (edição) a que o ingresso pertence. */
+  edition: number;
   camarote_extra_cents: number | null;
   payment_method: "pix" | "card" | "manual";
   lead_id: string | null;
@@ -91,7 +93,8 @@ async function countOccupied(tx: TxSql, excludeLeadId: string | null): Promise<n
   const [row] = await tx<{ n: number }[]>`
     SELECT count(*)::int AS n
     FROM purchases
-    WHERE (status = 'confirmed' OR (status = 'pending' AND expires_at > now()))
+    WHERE edition = current_edition()
+      AND (status = 'confirmed' OR (status = 'pending' AND expires_at > now()))
       AND ${excludeLeadId ? tx`id <> ${excludeLeadId} AND lead_id IS DISTINCT FROM ${excludeLeadId}` : tx`true`}
   `;
   return row.n;

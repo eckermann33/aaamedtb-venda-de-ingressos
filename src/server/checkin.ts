@@ -32,6 +32,8 @@ type Row = {
   status: string;
   checked_in_at: Date | null;
   checked_in_by: string | null;
+  /** O ingresso é da festa atual (e não de uma festa anterior). */
+  current: boolean;
 };
 
 const INVALID_REASON: Record<string, string> = {
@@ -56,6 +58,7 @@ function toDoor(r: Row): DoorTicket {
 
 function classify(r: Row | undefined): LookupResult {
   if (!r) return { result: "not_found" };
+  if (!r.current) return { result: "invalid", ticket: toDoor(r), reason: "Este ingresso é de uma festa anterior." };
   if (r.status !== "confirmed") {
     return { result: "invalid", ticket: toDoor(r), reason: INVALID_REASON[r.status] ?? "Ingresso inválido." };
   }
@@ -65,7 +68,8 @@ function classify(r: Row | undefined): LookupResult {
 
 async function findByCode(sql: Sql, code: string): Promise<Row | undefined> {
   const rows = await sql<Row[]>`
-    SELECT id, full_name, category_label, camarote, athletic, status, checked_in_at, checked_in_by
+    SELECT id, full_name, category_label, camarote, athletic, status, checked_in_at, checked_in_by,
+           edition = current_edition() AS current
     FROM purchases WHERE entry_code = ${code}
   `;
   return rows[0];
@@ -87,8 +91,8 @@ export async function checkIn(sql: Sql, raw: unknown, by: string): Promise<Check
   if (!code) return { result: "not_found" };
   const rows = await sql<Row[]>`
     UPDATE purchases SET checked_in_at = now(), checked_in_by = ${by.slice(0, 60)}, updated_at = now()
-    WHERE entry_code = ${code} AND status = 'confirmed' AND checked_in_at IS NULL
-    RETURNING id, full_name, category_label, camarote, athletic, status, checked_in_at, checked_in_by
+    WHERE entry_code = ${code} AND status = 'confirmed' AND checked_in_at IS NULL AND edition = current_edition()
+    RETURNING id, full_name, category_label, camarote, athletic, status, checked_in_at, checked_in_by, true AS current
   `;
   if (rows[0]) return { result: "checked_in", ticket: toDoor(rows[0]) };
   return classify(await findByCode(sql, code));
@@ -107,7 +111,7 @@ export async function undoCheckIn(sql: Sql, id: string): Promise<void> {
 export async function entryStats(sql: Sql): Promise<DoorStats> {
   const [row] = await sql<{ checked_in: number; total: number }[]>`
     SELECT count(*) FILTER (WHERE checked_in_at IS NOT NULL)::int AS checked_in, count(*)::int AS total
-    FROM purchases WHERE status = 'confirmed'
+    FROM purchases WHERE status = 'confirmed' AND edition = current_edition()
   `;
   return { checkedIn: row.checked_in, total: row.total };
 }

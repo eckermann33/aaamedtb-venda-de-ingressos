@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { EventInfo, TermsContent } from "@/config/event";
 import { IconAlert, IconCheck } from "@/components/icons";
+import { posterOf } from "@/lib/event-display";
 import { formatBRL } from "@/lib/money";
 
 type Category = { id: string; label: string; priceCents: number; active: boolean; sortOrder: number };
@@ -21,7 +22,15 @@ const toCents = (text: string) => {
   return Number.isFinite(n) ? Math.round(n * 100) : NaN;
 };
 
-export default function SettingsForm({ initial, pending }: { initial: Initial; pending: string[] }) {
+export default function SettingsForm({
+  initial,
+  pending,
+  posters,
+}: {
+  initial: Initial;
+  pending: string[];
+  posters: string[];
+}) {
   const router = useRouter();
   const [event, setEvent] = useState<EventInfo>(initial.event);
   const [capacity, setCapacity] = useState(initial.capacity === null ? "" : String(initial.capacity));
@@ -36,13 +45,22 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
 
   const set = <K extends keyof EventInfo>(k: K, v: EventInfo[K]) => setEvent((e) => ({ ...e, [k]: v }));
   const missing = (k: string) => pending.includes(k);
-  const text = (k: keyof EventInfo, label: string, opts: { type?: string; span?: boolean; placeholder?: string; area?: boolean } = {}) => (
+  const text = (
+    k: keyof EventInfo,
+    label: string,
+    opts: { type?: string; span?: boolean; placeholder?: string; area?: boolean } = {},
+  ) => (
     <div className={`field${opts.span ? " span-2" : ""}`}>
       <label htmlFor={`s-${k}`}>
         {label} {missing(k) && <span className="badge badge-warn">pendente</span>}
       </label>
       {opts.area ? (
-        <textarea id={`s-${k}`} className="input" value={(event[k] as string | null) ?? ""} onChange={(e) => set(k, e.target.value as never)} />
+        <textarea
+          id={`s-${k}`}
+          className="input"
+          value={(event[k] as string | null) ?? ""}
+          onChange={(e) => set(k, e.target.value as never)}
+        />
       ) : (
         <input
           id={`s-${k}`}
@@ -80,7 +98,10 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
         capacity: capacity.trim() === "" ? null : Number(capacity),
         serviceFeeCents: feeCents,
         terms: {
-          rules: rules.split("\n").map((r) => r.trim()).filter(Boolean),
+          rules: rules
+            .split("\n")
+            .map((r) => r.trim())
+            .filter(Boolean),
           refundPolicy: refund,
           cancellationPolicy: cancel,
           transferPolicy: transfer,
@@ -110,6 +131,28 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
         <div className="form-grid">
           {text("name", "Nome da festa")}
           {text("tagline", "Frase do cartaz")}
+          {text("titleTop", "Título na página: linha menor", { placeholder: "Ex.: Chopada" })}
+          {text("titleMain", "Título na página: linha de destaque", { placeholder: "Ex.: Final" })}
+          <div className="field span-2">
+            <label htmlFor="s-poster">Cartaz</label>
+            <select
+              id="s-poster"
+              className="input"
+              value={posterOf(event) ?? ""}
+              onChange={(e) => set("poster", e.target.value || null)}
+            >
+              <option value="">Sem cartaz</option>
+              {posters.map((p) => (
+                <option key={p} value={p}>
+                  {p.replace("/images/", "")}
+                </option>
+              ))}
+            </select>
+            <span className="hint">
+              Os cartazes ficam na pasta public/images do projeto (arquivos cartaz-*.webp). Também aparece na prévia do
+              link no WhatsApp.
+            </span>
+          </div>
           {text("date", "Data", { type: "date" })}
           <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
             {text("startTime", "Início", { type: "time" })}
@@ -120,7 +163,10 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
           {text("partner", "Parceiro")}
           {text("ageRating", "Classificação etária")}
           {text("about", "Sobre a festa", { span: true, area: true })}
-          {text("camarote", "Texto do camarote", { span: true, area: true })}
+          {text("camarote", "Texto do camarote (deixe vazio se a festa não tiver camarote)", {
+            span: true,
+            area: true,
+          })}
         </div>
       </section>
 
@@ -159,7 +205,9 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
                       style={{ minHeight: 40, width: 140 }}
                       value={c.id}
                       disabled={initial.categories.some((x) => x.id === c.id)}
-                      onChange={(e) => setCats((all) => all.map((x, j) => (j === i ? { ...x, id: e.target.value } : x)))}
+                      onChange={(e) =>
+                        setCats((all) => all.map((x, j) => (j === i ? { ...x, id: e.target.value } : x)))
+                      }
                       aria-label="Identificador"
                     />
                   </td>
@@ -168,7 +216,9 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
                       className="input"
                       style={{ minHeight: 40, width: 160 }}
                       value={c.label}
-                      onChange={(e) => setCats((all) => all.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                      onChange={(e) =>
+                        setCats((all) => all.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))
+                      }
                       aria-label="Nome da categoria"
                     />
                   </td>
@@ -178,7 +228,9 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
                       style={{ minHeight: 40, width: 110 }}
                       inputMode="decimal"
                       value={c.price}
-                      onChange={(e) => setCats((all) => all.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))}
+                      onChange={(e) =>
+                        setCats((all) => all.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))
+                      }
                       aria-label="Preço"
                     />
                   </td>
@@ -186,13 +238,19 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
                     <input
                       type="checkbox"
                       checked={c.active}
-                      onChange={(e) => setCats((all) => all.map((x, j) => (j === i ? { ...x, active: e.target.checked } : x)))}
+                      onChange={(e) =>
+                        setCats((all) => all.map((x, j) => (j === i ? { ...x, active: e.target.checked } : x)))
+                      }
                       aria-label="Ativa"
                     />
                   </td>
                   <td>
                     {!initial.categories.some((x) => x.id === c.id) && (
-                      <button type="button" className="back-link" onClick={() => setCats((all) => all.filter((_, j) => j !== i))}>
+                      <button
+                        type="button"
+                        className="back-link"
+                        onClick={() => setCats((all) => all.filter((_, j) => j !== i))}
+                      >
                         remover
                       </button>
                     )}
@@ -205,22 +263,40 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
         <button
           type="button"
           className="btn btn-ghost btn-sm"
-          onClick={() => setCats((all) => [...all, { id: "", label: "", price: "", priceCents: 0, active: true, sortOrder: all.length + 1 }])}
+          onClick={() =>
+            setCats((all) => [
+              ...all,
+              { id: "", label: "", price: "", priceCents: 0, active: true, sortOrder: all.length + 1 },
+            ])
+          }
         >
           + Adicionar categoria
         </button>
         <div className="form-grid" style={{ marginTop: 18 }}>
           <div className="field">
             <label htmlFor="s-fee">Taxa de serviço por ingresso (R$)</label>
-            <input id="s-fee" className="input" inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} />
+            <input
+              id="s-fee"
+              className="input"
+              inputMode="decimal"
+              value={fee}
+              onChange={(e) => setFee(e.target.value)}
+            />
             <span className="hint">
-              Exibida separadamente ao comprador. Atual: {Number.isFinite(toCents(fee)) ? formatBRL(toCents(fee)) : "—"} · use 0,00
-              para não cobrar.
+              Exibida separadamente ao comprador. Atual: {Number.isFinite(toCents(fee)) ? formatBRL(toCents(fee)) : "—"}{" "}
+              · use 0,00 para não cobrar.
             </span>
           </div>
           <div className="field">
             <label htmlFor="s-cap">Limite total de ingressos</label>
-            <input id="s-cap" className="input" inputMode="numeric" placeholder="Vazio = sem limite" value={capacity} onChange={(e) => setCapacity(e.target.value.replace(/\D/g, ""))} />
+            <input
+              id="s-cap"
+              className="input"
+              inputMode="numeric"
+              placeholder="Vazio = sem limite"
+              value={capacity}
+              onChange={(e) => setCapacity(e.target.value.replace(/\D/g, ""))}
+            />
             <span className="hint">Conta ingressos confirmados + reservas em pagamento.</span>
           </div>
         </div>
@@ -230,24 +306,35 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
         <h2>Regras e políticas</h2>
         <div className="field">
           <label htmlFor="s-rules">Regras de entrada (uma por linha)</label>
-          <textarea id="s-rules" className="input" style={{ minHeight: 200 }} value={rules} onChange={(e) => setRules(e.target.value)} />
+          <textarea
+            id="s-rules"
+            className="input"
+            style={{ minHeight: 200 }}
+            value={rules}
+            onChange={(e) => setRules(e.target.value)}
+          />
         </div>
         <div className="field">
           <label htmlFor="s-refund">
             Política de reembolso {missing("refundPolicy") && <span className="badge badge-warn">pendente</span>}
           </label>
           <textarea id="s-refund" className="input" value={refund} onChange={(e) => setRefund(e.target.value)} />
-          <span className="hint">Lembrete: o Código de Defesa do Consumidor garante arrependimento em até 7 dias em compras online (art. 49). Consulte a diretoria/jurídico.</span>
+          <span className="hint">
+            Lembrete: o Código de Defesa do Consumidor garante arrependimento em até 7 dias em compras online (art. 49).
+            Consulte a diretoria/jurídico.
+          </span>
         </div>
         <div className="field">
           <label htmlFor="s-cancel">
-            Política em caso de cancelamento do evento {missing("cancellationPolicy") && <span className="badge badge-warn">pendente</span>}
+            Política em caso de cancelamento do evento{" "}
+            {missing("cancellationPolicy") && <span className="badge badge-warn">pendente</span>}
           </label>
           <textarea id="s-cancel" className="input" value={cancel} onChange={(e) => setCancel(e.target.value)} />
         </div>
         <div className="field">
           <label htmlFor="s-transfer">
-            Política de transferência de ingresso {missing("transferPolicy") && <span className="badge badge-warn">pendente</span>}
+            Política de transferência de ingresso{" "}
+            {missing("transferPolicy") && <span className="badge badge-warn">pendente</span>}
           </label>
           <textarea id="s-transfer" className="input" value={transfer} onChange={(e) => setTransfer(e.target.value)} />
         </div>
@@ -258,7 +345,11 @@ export default function SettingsForm({ initial, pending }: { initial: Initial; p
           {saving ? "Salvando…" : "Salvar configurações"}
         </button>
         {status && (
-          <span className={status.ok ? "hint" : "field-error"} role="status" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+          <span
+            className={status.ok ? "hint" : "field-error"}
+            role="status"
+            style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
+          >
             {status.ok ? <IconCheck size={16} /> : <IconAlert size={16} />} {status.msg}
           </span>
         )}

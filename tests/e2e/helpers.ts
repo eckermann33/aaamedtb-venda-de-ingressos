@@ -8,7 +8,8 @@ export const db = postgres(E2E_DB, { max: 2, idle_timeout: 2, onnotice: () => {}
 
 /** Evento configurado e vendas abertas (dados de TESTE, nunca de produção). */
 export async function readyEvent(opts: { capacity?: number | null; salesOpen?: boolean } = {}) {
-  await db`TRUNCATE payments, purchases, webhook_events, rate_limits RESTART IDENTITY CASCADE`;
+  await db`TRUNCATE payments, purchases, webhook_events, rate_limits, editions_archive RESTART IDENTITY CASCADE`;
+  await db`UPDATE ticket_categories SET active = true WHERE id IN ('feminino', 'masculino')`;
   const [terms] = await db<{ id: number }[]>`
     INSERT INTO terms_versions (content, content_hash)
     SELECT content || ${db.json({
@@ -20,7 +21,7 @@ export async function readyEvent(opts: { capacity?: number | null; salesOpen?: b
     RETURNING id
   `;
   await db`
-    UPDATE settings SET sales_open = ${opts.salesOpen ?? true}, capacity = ${opts.capacity ?? null},
+    UPDATE settings SET sales_open = ${opts.salesOpen ?? true}, capacity = ${opts.capacity ?? null}, edition = 1,
       service_fee_cents = 300, current_terms_version_id = ${terms.id},
       event = event || ${db.json({ startTime: "23:00", venueName: "[TESTE] Local", venueAddress: "[TESTE] Rua 1", contactEmail: "teste@example.com" })}
   `;
@@ -116,6 +117,9 @@ export async function payViaMock(
       }),
     })
   ).json();
-  const result = await mockPayment(String(created.id), { status, ...(over.badSignature ? { badSignature: true } : {}) });
+  const result = await mockPayment(String(created.id), {
+    status,
+    ...(over.badSignature ? { badSignature: true } : {}),
+  });
   return { id: String(created.id), webhookStatuses: result.webhookStatuses as number[] };
 }

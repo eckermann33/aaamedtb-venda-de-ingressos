@@ -7,8 +7,8 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Camada | Ferramenta | Resultado |
 | --- | --- | --- |
 | Tipos (TypeScript) | `npm run typecheck` | ✅ sem erros |
-| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 90/90 |
-| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 28/28 |
+| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 97/97 |
+| Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 29/29 |
 | Build de produção | `npm run build` | ✅ |
 
 **Importante:** os testes de pagamento usam um **simulador local** do Mercado Pago (`tests/mock-mp/server.mjs`), que imita a API e envia webhooks assinados. O ambiente onde o projeto foi construído **não tem acesso à rede do Mercado Pago**, então **não houve teste contra o sandbox nem contra a produção do Mercado Pago**. Isso precisa ser feito antes de abrir as vendas (roteiro na seção 7 do README).
@@ -71,6 +71,18 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Dados na portaria | Integração: o leitor recebe só nome, categoria, camarote/Atlética e horário de entrada (sem telefone nem valores) |
 
 **Não testado:** leitura em iPhone/Android reais (o teste usa a câmera falsa do Chromium). Faça um teste no celular de quem vai ficar na porta antes da festa: abra `/portaria`, permita a câmera e leia o QR de um ingresso de teste.
+
+## Várias festas (nova festa)
+
+| Cenário | Como foi verificado |
+| --- | --- |
+| Começar nova festa | Integração e navegador: exige vendas fechadas e confirmação; a festa anterior vai para o arquivo; nome, título, cartaz e data da nova festa aparecem no site; o resto da configuração (contato, organização) é mantido |
+| Recomeço do zero | Integração: lotação esgotada na festa anterior fica livre na nova; lista oficial, resumo, listagem e exportação mostram só a festa atual; compras novas e ingressos manuais/Atlética entram na festa atual |
+| Nada é apagado | Integração e navegador: a festa anterior continua consultável e exportável por `?edicao=N`; pedido antigo mostra "Festa encerrada" |
+| Portaria | Integração: QR da festa anterior é recusado ("festa anterior") e não registra entrada |
+| Alertas | Integração: estorno pendente da festa anterior continua no resumo |
+| Sem preços | Integração e navegador: categorias desativadas → "Valores em breve" e vendas bloqueadas; sem horário/local, a nova festa também não abre vendas |
+| Configurações | Navegador: salvar o formulário mantém título em duas linhas e cartaz; configuração antiga (sem esses campos) continua exibindo "Party do / Saco Cheio" e o cartaz anterior |
 
 ## Outros testes
 

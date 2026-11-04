@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Crown, IconBan, IconCalendar, IconCheck, IconClock, IconId, IconInfo, IconPin } from "@/components/icons";
 import { PendingText, Satin, SiteFooter, SiteHeader } from "@/components/site";
 import { eventDateParts } from "@/lib/dates";
+import { heroTitle, posterOf } from "@/lib/event-display";
 import { formatBRL } from "@/lib/money";
 import { getSql } from "@/server/db";
 import { getPublicSettings } from "@/server/public";
@@ -21,6 +22,10 @@ export default async function EventPage() {
   const camaroteCategory = s.categories.find((c) => c.id === "camarote") ?? null;
   const camaroteOnline = camaroteCategory !== null;
   const qr = s.entryMode === "qrcode";
+  const title = heroTitle(e);
+  const poster = posterOf(e);
+  const tickets = s.categories.filter((c) => c.id !== "camarote");
+  const showCamarote = camaroteOnline || e.camarote.trim().length > 0;
   const time = e.startTime ? (e.endTime ? `${e.startTime} às ${e.endTime}` : `A partir das ${e.startTime}`) : null;
 
   return (
@@ -49,10 +54,10 @@ export default async function EventPage() {
               </div>
               <h1>
                 <span className="title-wrap">
-                  <span className="title-party distressed">Party do</span>
+                  {title.top && <span className="title-party distressed">{title.top}</span>}
                   <Crown className="crown" />
                 </span>
-                <span className="title-brush">Saco Cheio</span>
+                <span className="title-brush">{title.main}</span>
               </h1>
               <span className="brush-underline" aria-hidden />
               <p className="hand">{e.tagline}</p>
@@ -93,16 +98,13 @@ export default async function EventPage() {
               </div>
             </div>
 
-            <div className="hero-poster">
-              <div className="poster-frame">
-                <img
-                  src="/images/cartaz-party-do-saco-cheio.webp"
-                  alt={`Cartaz oficial da ${e.name}`}
-                  width={901}
-                  height={1600}
-                />
+            {poster && (
+              <div className="hero-poster">
+                <div className="poster-frame">
+                  <img src={poster} alt={`Cartaz oficial da ${e.name}`} />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="container">
@@ -157,42 +159,48 @@ export default async function EventPage() {
             <h2 className="section-title" id="t-ingressos">
               Ingressos <em>online</em>
             </h2>
+            {tickets.length === 0 && (
+              <div className="notice" style={{ marginTop: 8 }}>
+                <IconInfo size={20} />
+                <span>
+                  <strong>Valores em breve.</strong> Os preços e a abertura das vendas serão divulgados pela Atlética.
+                </span>
+              </div>
+            )}
             <div className="tickets">
-              {s.categories
-                .filter((c) => c.id !== "camarote")
-                .map((c) => (
-                  <article className="ticket" key={c.id}>
-                    <div className="ticket-main">
-                      <span className="label">Pista · {e.name}</span>
-                      <h3 className="ticket-name">{c.label}</h3>
-                      <div className="ticket-price">
-                        <small>R$</small>
-                        {(c.priceCents / 100).toFixed(2).replace(".", ",")}
-                      </div>
-                      {fee > 0 && (
-                        <p className="ticket-fee">
-                          + <strong>{formatBRL(fee)}</strong> de taxa de serviço · total{" "}
-                          <strong>{formatBRL(c.priceCents + fee)}</strong>
-                        </p>
-                      )}
+              {tickets.map((c) => (
+                <article className="ticket" key={c.id}>
+                  <div className="ticket-main">
+                    <span className="label">Pista · {e.name}</span>
+                    <h3 className="ticket-name">{c.label}</h3>
+                    <div className="ticket-price">
+                      <small>R$</small>
+                      {(c.priceCents / 100).toFixed(2).replace(".", ",")}
                     </div>
-                    <div className="ticket-stub">
-                      {s.canBuy ? (
-                        <Link
-                          className="btn"
-                          href={`/comprar?categoria=${c.id}`}
-                          aria-label={`Comprar ingresso ${c.label}`}
-                        >
-                          Comprar
-                        </Link>
-                      ) : (
-                        <span className="btn" aria-disabled="true">
-                          {s.soldOut ? "Esgotado" : "Em breve"}
-                        </span>
-                      )}
-                    </div>
-                  </article>
-                ))}
+                    {fee > 0 && (
+                      <p className="ticket-fee">
+                        + <strong>{formatBRL(fee)}</strong> de taxa de serviço · total{" "}
+                        <strong>{formatBRL(c.priceCents + fee)}</strong>
+                      </p>
+                    )}
+                  </div>
+                  <div className="ticket-stub">
+                    {s.canBuy ? (
+                      <Link
+                        className="btn"
+                        href={`/comprar?categoria=${c.id}`}
+                        aria-label={`Comprar ingresso ${c.label}`}
+                      >
+                        Comprar
+                      </Link>
+                    ) : (
+                      <span className="btn" aria-disabled="true">
+                        {s.soldOut ? "Esgotado" : "Em breve"}
+                      </span>
+                    )}
+                  </div>
+                </article>
+              ))}
             </div>
             <div className="notice" style={{ marginTop: 18 }}>
               <IconInfo size={20} />
@@ -268,22 +276,26 @@ export default async function EventPage() {
                   <Link href="/regras">Ver regras completas, reembolso, cancelamento e transferência →</Link>
                 </p>
               </div>
-              <div className="card camarote">
-                <Crown className="crown-bg" />
-                <span className="label">Área VIP</span>
-                <h3 className="section-title" style={{ fontSize: "1.8rem" }}>
-                  Camarote
-                </h3>
-                <p>{e.camarote}</p>
-                <div className="notice notice-warn">
-                  <IconInfo size={20} />
-                  <span>
-                    {camaroteOnline
-                      ? `O camarote é um adicional de ${formatBRL(camaroteCategory.priceCents)}: marque a opção na compra do seu ingresso. Quem já comprou pode comprar só o camarote, na mesma página.`
-                      : "O camarote não é vendido pelo site nesta edição."}
-                  </span>
-                </div>
-                <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "22px 0" }} />
+              <div className={showCamarote ? "card camarote" : "card"}>
+                {showCamarote && (
+                  <>
+                    <Crown className="crown-bg" />
+                    <span className="label">Área VIP</span>
+                    <h3 className="section-title" style={{ fontSize: "1.8rem" }}>
+                      Camarote
+                    </h3>
+                    {e.camarote.trim() && <p>{e.camarote}</p>}
+                    <div className="notice notice-warn">
+                      <IconInfo size={20} />
+                      <span>
+                        {camaroteCategory
+                          ? `O camarote é um adicional de ${formatBRL(camaroteCategory.priceCents)}: marque a opção na compra do seu ingresso. Quem já comprou pode comprar só o camarote, na mesma página.`
+                          : "O camarote não é vendido pelo site nesta edição."}
+                      </span>
+                    </div>
+                    <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "22px 0" }} />
+                  </>
+                )}
                 <span className="label">Classificação etária</span>
                 <p style={{ marginBottom: 0 }}>
                   <strong style={{ color: "var(--cream)" }}>{e.ageRating}</strong> Poderá ser exigido documento oficial
@@ -317,19 +329,21 @@ export default async function EventPage() {
               )}
             </div>
           </div>
-          <div className="container" style={{ marginTop: 40 }}>
-            <details className="card poster-mobile">
-              <summary style={{ cursor: "pointer", fontWeight: 700, color: "var(--neon)" }}>Ver cartaz oficial</summary>
-              <img
-                src="/images/cartaz-party-do-saco-cheio.webp"
-                alt={`Cartaz oficial da ${e.name}`}
-                width={901}
-                height={1600}
-                loading="lazy"
-                style={{ marginTop: 14, borderRadius: 12 }}
-              />
-            </details>
-          </div>
+          {poster && (
+            <div className="container" style={{ marginTop: 40 }}>
+              <details className="card poster-mobile">
+                <summary style={{ cursor: "pointer", fontWeight: 700, color: "var(--neon)" }}>
+                  Ver cartaz oficial
+                </summary>
+                <img
+                  src={poster}
+                  alt={`Cartaz oficial da ${e.name}`}
+                  loading="lazy"
+                  style={{ marginTop: 14, borderRadius: 12 }}
+                />
+              </details>
+            </div>
+          )}
         </section>
       </main>
 

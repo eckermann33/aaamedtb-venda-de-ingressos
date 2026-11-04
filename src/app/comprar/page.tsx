@@ -4,6 +4,7 @@ import { Satin, SiteFooter, SiteHeader } from "@/components/site";
 import { getSql } from "@/server/db";
 import { getPublicSettings } from "@/server/public";
 import { MAX_TICKETS_PER_ORDER } from "@/config/event";
+import { heroTitle } from "@/lib/event-display";
 import CheckoutForm from "./CheckoutForm";
 
 export const metadata: Metadata = { title: "Comprar ingresso" };
@@ -12,6 +13,7 @@ export default async function BuyPage(props: PageProps<"/comprar">) {
   const s = await getPublicSettings(getSql());
   const query = await props.searchParams;
   const preselected = typeof query.categoria === "string" ? query.categoria : null;
+  const title = heroTitle(s.event);
 
   return (
     <>
@@ -22,8 +24,8 @@ export default async function BuyPage(props: PageProps<"/comprar">) {
           <div className="checkout-head">
             <span className="label">Ingresso oficial</span>
             <h1 style={{ margin: "6px 0 0" }}>
-              <span className="title-party distressed">Party do </span>
-              <span className="title-brush">Saco Cheio</span>
+              {title.top && <span className="title-party distressed">{title.top} </span>}
+              <span className="title-brush">{title.main}</span>
             </h1>
           </div>
           {s.canBuy ? (

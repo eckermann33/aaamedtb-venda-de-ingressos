@@ -58,18 +58,22 @@ export async function getStats(sql: Sql): Promise<Stats> {
                           OR (status = 'pending' AND expires_at <= now()))::int AS not_completed,
       count(*) FILTER (WHERE status = 'refunded')::int AS refunded,
       coalesce(sum(amount_cents) FILTER (WHERE status = 'refunded'), 0)::int AS refunded_cents,
-      count(*) FILTER (WHERE attention IS NOT NULL)::int AS attention
+      -- Alertas contam todas as festas: um estorno pendente da festa anterior ainda precisa de ação.
+      (SELECT count(*) FROM purchases WHERE attention IS NOT NULL)::int AS attention
     FROM purchases
+    WHERE edition = current_edition()
   `;
   const [payments] = await sql<{ approved: number }[]>`
-    SELECT count(*)::int AS approved FROM payments WHERE status = 'approved' AND validation_error IS NULL
+    SELECT count(*)::int AS approved
+    FROM payments pay JOIN purchases p ON p.id = pay.purchase_id
+    WHERE pay.status = 'approved' AND pay.validation_error IS NULL AND p.edition = current_edition()
   `;
   const byCategory = await sql<{ category_id: string; label: string; confirmed: number; revenue: number }[]>`
     SELECT c.id AS category_id, c.label,
            count(p.id) FILTER (WHERE p.status = 'confirmed')::int AS confirmed,
            coalesce(sum(p.amount_cents) FILTER (WHERE p.status = 'confirmed'), 0)::int AS revenue
     FROM ticket_categories c
-    LEFT JOIN purchases p ON p.category_id = c.id
+    LEFT JOIN purchases p ON p.category_id = c.id AND p.edition = current_edition()
     GROUP BY c.id, c.label, c.sort_order
     ORDER BY c.sort_order
   `;
@@ -127,6 +131,8 @@ export type ListFilters = {
   dir?: "asc" | "desc";
   page?: number;
   pageSize?: number;
+  /** Edição (festa) a listar; padrão: a festa atual. */
+  edition?: number;
 };
 
 export type ListRow = {
@@ -166,6 +172,14 @@ export async function listPurchases(sql: Sql, f: ListFilters): Promise<{ rows: L
     ${term ? sql`AND name_search LIKE ${likePattern(term)}` : sql``}
     ${f.category ? sql`AND category_id = ${f.category}` : sql``}
     ${f.status === "attention" ? sql`AND attention IS NOT NULL` : f.status ? sql`AND status = ${f.status}` : sql``}
+    ${
+      // Só a festa atual (ou a edição pedida); os alertas aparecem de todas as festas.
+      f.status === "attention"
+        ? sql``
+        : f.edition
+          ? sql`AND edition = ${f.edition}`
+          : sql`AND edition = current_edition()`
+    }
   `;
   const direction = f.dir === "asc" ? sql`ASC` : sql`DESC`;
   const order =
@@ -195,22 +209,23 @@ export type OfficialRow = {
   confirmed_at: Date;
 };
 
-/** Lista oficial de entrada: somente compras com pagamento aprovado e confirmado. */
-export async function officialList(sql: Sql): Promise<OfficialRow[]> {
+/** Lista oficial de entrada: somente compras confirmadas da festa atual (ou da edição pedida). */
+export async function officialList(sql: Sql, edition?: number): Promise<OfficialRow[]> {
   return sql<OfficialRow[]>`
     SELECT full_name, athletic, category_label, amount_cents, ticket_code, confirmed_at
     FROM purchases
-    WHERE status = 'confirmed'
+    WHERE status = 'confirmed' AND ${edition ? sql`edition = ${edition}` : sql`edition = current_edition()`}
     ORDER BY athletic ASC, name_search ASC, confirmed_at ASC
   `;
 }
 
-/** Todas as compras (relatório financeiro), da mais antiga para a mais recente. */
-export async function allPurchases(sql: Sql): Promise<ListRow[]> {
+/** Todas as compras da festa atual (ou da edição pedida), da mais antiga para a mais recente. */
+export async function allPurchases(sql: Sql, edition?: number): Promise<ListRow[]> {
   return sql<ListRow[]>`
     SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, athletic, camarote_extra_cents, note, lead_id,
            status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at, checked_in_at
     FROM purchases
+    WHERE ${edition ? sql`edition = ${edition}` : sql`edition = current_edition()`}
     ORDER BY created_at ASC, full_name ASC
   `;
 }

@@ -25,19 +25,23 @@ function money(cents: number) {
 export async function GET(request: Request) {
   const admin = await requireAdminApi(request);
   if (admin instanceof Response) return admin;
-  const scope = new URL(request.url).searchParams.get("scope") === "all" ? "all" : "official";
+  const params = new URL(request.url).searchParams;
+  const scope = params.get("scope") === "all" ? "all" : "official";
+  // Festa anterior: ?edicao=N (padrão: a festa atual).
+  const edicao = Number(params.get("edicao"));
+  const edition = Number.isInteger(edicao) && edicao > 0 ? edicao : undefined;
   const sql = getSql();
   const stamp = new Date().toISOString().slice(0, 10);
 
   let csv: string;
   if (scope === "official") {
-    const rows = await officialList(sql);
+    const rows = await officialList(sql, edition);
     csv = toCsv(
       ["Nº", "Seção", "Nome completo", "Categoria", "Código interno", "Entrada (marcar)"],
       rows.map((r, i) => [i + 1, r.athletic ? "Atlética" : "Geral", r.full_name, r.category_label, r.ticket_code, ""]),
     );
   } else {
-    const all = await allPurchases(sql);
+    const all = await allPurchases(sql, edition);
     csv = toCsv(
       [
         "Nome completo",
@@ -81,11 +85,11 @@ export async function GET(request: Request) {
       ]),
     );
   }
-  await audit(sql, admin.id, "export_csv", { scope });
+  await audit(sql, admin.id, "export_csv", { scope, edition: edition ?? "atual" });
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="invictus-${scope === "official" ? "lista-oficial" : "compras"}-${stamp}.csv"`,
+      "Content-Disposition": `attachment; filename="invictus-${scope === "official" ? "lista-oficial" : "compras"}${edition ? `-festa-${edition}` : ""}-${stamp}.csv"`,
       "Cache-Control": "no-store",
     },
   });

@@ -333,6 +333,17 @@ Painel → **Portaria** → escolha o modelo de entrada. Dá para trocar quando 
 - Mesmo no modo QR Code, **imprima a lista de entrada como reserva**: o leitor precisa de internet.
 - O conteúdo do QR é um código próprio de cada ingresso (≈60 bits aleatórios), diferente do "código interno" que aparece na lista impressa e no CSV, então quem tem a lista não consegue forjar um QR.
 
+### 8.2. Começar uma nova festa
+
+O sistema guarda várias festas. Para a próxima:
+
+1. **Feche as vendas** no Resumo e **baixe as planilhas** (lista oficial e todas as compras).
+2. Coloque o cartaz em `public/images/cartaz-<nome>.webp` (ex.: `cartaz-chopada-final.webp`) e publique. Opcional: prepare os dados da próxima festa em `DEFAULT_EVENT` (`src/config/event.ts`), que viram a sugestão do formulário.
+3. Painel → Configurações → **Começar nova festa** (ou o atalho no Resumo): confira nome, data, título em duas linhas, cartaz, frase, local/horário (podem ficar "a confirmar"), texto do camarote (vazio = sem camarote) e lotação. Deixe marcado "desativar as categorias" se os preços ainda não foram definidos: o site mostra **"Valores em breve"**. Digite `NOVA FESTA` e confirme.
+4. Revise **regras e preços** em Configurações e, quando estiver tudo pronto, **abra as vendas**.
+
+O que acontece: a festa anterior vai para o arquivo com todos os ingressos (nada é apagado). Lotação, lista de entrada, resumo, ingressos manuais/Atlética e o leitor da portaria passam a contar só a festa nova; QR Codes da festa anterior são recusados na portaria; pedidos antigos mostram "Festa encerrada". As planilhas das festas anteriores ficam em **Começar nova festa → Festas anteriores**. Alertas de estorno de festas anteriores continuam aparecendo no Resumo.
+
 ## 9. Serviços externos e custos
 
 Valores **de referência — confirme nos sites oficiais**, pois mudam com frequência e eu não consegui acessá-los deste ambiente:

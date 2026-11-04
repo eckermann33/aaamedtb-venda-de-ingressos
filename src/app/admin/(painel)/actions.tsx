@@ -753,3 +753,139 @@ export function TicketLinkBox({ url, phone, name }: { url: string; phone: string
     </div>
   );
 }
+
+type NewEditionValues = {
+  name: string;
+  titleTop: string;
+  titleMain: string;
+  poster: string;
+  tagline: string;
+  date: string;
+  startTime: string;
+  venueName: string;
+  venueAddress: string;
+  partner: string;
+  about: string;
+  camarote: string;
+  capacity: string;
+};
+
+/** Formulário da nova festa: arquiva a atual e configura a próxima. */
+export function NewEditionForm({
+  initial,
+  posters,
+  salesOpen,
+}: {
+  initial: NewEditionValues;
+  posters: string[];
+  salesOpen: boolean;
+}) {
+  const router = useRouter();
+  const [v, setV] = useState(initial);
+  const [deactivate, setDeactivate] = useState(true);
+  const [confirmText, setConfirmText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const set =
+    (k: keyof NewEditionValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setV((cur) => ({ ...cur, [k]: e.target.value }));
+  const field = (
+    k: keyof NewEditionValues,
+    label: string,
+    opts: { type?: string; span?: boolean; area?: boolean; hint?: string } = {},
+  ) => (
+    <div className={`field${opts.span ? " span-2" : ""}`}>
+      <label htmlFor={`n-${k}`}>{label}</label>
+      {opts.area ? (
+        <textarea id={`n-${k}`} className="input" value={v[k]} onChange={set(k)} />
+      ) : (
+        <input id={`n-${k}`} className="input" type={opts.type ?? "text"} value={v[k]} onChange={set(k)} />
+      )}
+      {opts.hint && <span className="hint">{opts.hint}</span>}
+    </div>
+  );
+
+  return (
+    <form
+      className="form-grid"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setMsg(null);
+        const r = await post("/api/admin/nova-festa", {
+          ...v,
+          capacity: v.capacity.trim() === "" ? null : Number(v.capacity),
+          deactivateCategories: deactivate,
+          confirm: confirmText.trim().toUpperCase(),
+        });
+        setBusy(false);
+        if (!r.ok) return setMsg({ ok: false, text: r.data?.error?.message ?? "Erro." });
+        setMsg({
+          ok: true,
+          text: `Pronto! A festa nº ${r.data.edition} começou. Revise regras e preços em Configurações.`,
+        });
+        router.refresh();
+      }}
+    >
+      {field("name", "Nome da festa")}
+      {field("date", "Data", { type: "date" })}
+      {field("titleTop", "Título na página: linha menor", { hint: "Ex.: Chopada" })}
+      {field("titleMain", "Título na página: linha de destaque", { hint: "Ex.: Final" })}
+      <div className="field span-2">
+        <label htmlFor="n-poster">Cartaz</label>
+        <select id="n-poster" className="input" value={v.poster} onChange={set("poster")}>
+          <option value="">Sem cartaz</option>
+          {posters.map((p) => (
+            <option key={p} value={p}>
+              {p.replace("/images/", "")}
+            </option>
+          ))}
+        </select>
+      </div>
+      {field("tagline", "Frase do cartaz", { span: true })}
+      {field("startTime", "Início (pode deixar vazio)", { type: "time" })}
+      {field("capacity", "Lotação (vazio = sem limite)", { type: "number" })}
+      {field("venueName", "Local (pode deixar vazio)")}
+      {field("venueAddress", "Endereço (opcional)")}
+      {field("partner", "Parceiro / organização (opcional)")}
+      {field("about", "Sobre a festa", { span: true, area: true })}
+      {field("camarote", "Texto do camarote (vazio = sem camarote)", { span: true, area: true })}
+      <label className="checkbox span-2">
+        <input type="checkbox" checked={deactivate} onChange={(e) => setDeactivate(e.target.checked)} />
+        <span>
+          Desativar as categorias de ingresso até eu definir os preços da nova festa (o site mostra &quot;Valores em
+          breve&quot;).
+        </span>
+      </label>
+      <div className="field span-2">
+        <label htmlFor="n-confirm">Já baixei as planilhas da festa atual. Digite NOVA FESTA para confirmar</label>
+        <input
+          id="n-confirm"
+          className="input"
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          autoComplete="off"
+        />
+      </div>
+      <div className="span-2">
+        <button
+          className="btn"
+          disabled={
+            busy ||
+            salesOpen ||
+            confirmText.trim().toUpperCase() !== "NOVA FESTA" ||
+            v.name.trim().length < 2 ||
+            !v.date
+          }
+        >
+          {busy ? "Começando…" : "Começar nova festa"}
+        </button>
+        {msg && (
+          <p className={msg.ok ? "hint" : "field-error"} role={msg.ok ? "status" : "alert"} style={{ marginTop: 10 }}>
+            {msg.text}
+          </p>
+        )}
+      </div>
+    </form>
+  );
+}
