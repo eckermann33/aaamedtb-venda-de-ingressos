@@ -38,6 +38,7 @@ const schema = z.object({
   about: z.string().trim().max(1500),
   camarote: z.string().trim().max(800),
   capacity: z.number().int().positive().max(100000).nullable(),
+  serviceFeeCents: z.number().int().min(0).max(10000),
   deactivateCategories: z.boolean(),
   // Confirmação explícita de que a festa anterior foi exportada.
   confirm: z.literal("NOVA FESTA"),

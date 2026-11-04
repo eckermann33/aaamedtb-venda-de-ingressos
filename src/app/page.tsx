@@ -71,7 +71,7 @@ export default async function EventPage() {
                     {s.minPriceCents !== null && (
                       <span className="price-hint">
                         A partir de <strong>{formatBRL(s.minPriceCents)}</strong>
-                        {fee > 0 && <> + {formatBRL(fee)} de taxa</>} · Pix ou cartão
+                        {fee > 0 && <> + {formatBRL(fee)} de taxa por ingresso</>} · Pix ou cartão
                       </span>
                     )}
                   </>
@@ -179,7 +179,7 @@ export default async function EventPage() {
                     </div>
                     {fee > 0 && (
                       <p className="ticket-fee">
-                        + <strong>{formatBRL(fee)}</strong> de taxa de serviço · total{" "}
+                        + <strong>{formatBRL(fee)}</strong> de taxa de serviço por ingresso · total{" "}
                         <strong>{formatBRL(c.priceCents + fee)}</strong>
                       </p>
                     )}

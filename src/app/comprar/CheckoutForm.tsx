@@ -269,7 +269,7 @@ export default function CheckoutForm({
                     <span className="choice-title">{c.id === CAMAROTE ? "Só o camarote" : c.label}</span>
                     <span className="choice-price">{formatBRL(c.priceCents)}</span>
                     {c.id === CAMAROTE && <span className="choice-sub">para quem já comprou o ingresso</span>}
-                    {feeCents > 0 && <span className="choice-sub">+ {formatBRL(feeCents)} de taxa</span>}
+                    {feeCents > 0 && <span className="choice-sub">+ {formatBRL(feeCents)} de taxa por ingresso</span>}
                   </span>
                   <span className="choice-check" aria-hidden>
                     <IconCheck size={14} />

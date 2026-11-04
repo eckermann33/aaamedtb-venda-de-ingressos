@@ -355,7 +355,7 @@ Valores **de referência — confirme nos sites oficiais**, pois mudam com frequ
 | Domínio próprio (opcional) | Ex.: ingressos.suaatletica.com.br | `.com.br` ≈ R$ 40/ano no Registro.br. O domínio gratuito da Railway funciona. |
 | cron-job.org (opcional) | Conciliação periódica | Gratuito |
 
-A **taxa de serviço de R$ 3,00** entra no faturamento da Atlética (aparece separada no painel); as **tarifas do Mercado Pago** são descontadas pelo próprio Mercado Pago e **não** são somadas ao preço do comprador.
+A **taxa de serviço (R$ 5,00 por ingresso a partir da Chopada Final; R$ 3,00 na Party do Saco Cheio)** entra no faturamento da Atlética (aparece separada no painel); as **tarifas do Mercado Pago** são descontadas pelo próprio Mercado Pago e **não** são somadas ao preço do comprador.
 
 ---
 

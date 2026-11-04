@@ -768,6 +768,7 @@ type NewEditionValues = {
   about: string;
   camarote: string;
   capacity: string;
+  serviceFee: string;
 };
 
 /** Formulário da nova festa: arquiva a atual e configura a próxima. */
@@ -810,11 +811,14 @@ export function NewEditionForm({
       className="form-grid"
       onSubmit={async (e) => {
         e.preventDefault();
+        const feeCents = Math.round(Number(v.serviceFee.replace(/\./g, "").replace(",", ".").trim()) * 100);
+        if (!Number.isFinite(feeCents) || feeCents < 0) return setMsg({ ok: false, text: "Taxa de serviço inválida." });
         setBusy(true);
         setMsg(null);
         const r = await post("/api/admin/nova-festa", {
           ...v,
           capacity: v.capacity.trim() === "" ? null : Number(v.capacity),
+          serviceFeeCents: feeCents,
           deactivateCategories: deactivate,
           confirm: confirmText.trim().toUpperCase(),
         });
@@ -845,6 +849,9 @@ export function NewEditionForm({
       {field("tagline", "Frase do cartaz", { span: true })}
       {field("startTime", "Início (pode deixar vazio)", { type: "time" })}
       {field("capacity", "Lotação (vazio = sem limite)", { type: "number" })}
+      {field("serviceFee", "Taxa de serviço por ingresso (R$)", {
+        hint: "Cobrada em cada ingresso: um pedido de 3 ingressos paga 3 taxas.",
+      })}
       {field("venueName", "Local (pode deixar vazio)")}
       {field("venueAddress", "Endereço (opcional)")}
       {field("partner", "Parceiro / organização (opcional)")}

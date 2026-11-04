@@ -21,8 +21,8 @@ test("página do evento mostra preços com a taxa e não exibe nomes de particip
     "src",
     "/images/cartaz-chopada-final.webp",
   );
-  await expect(page.getByText("+ R$ 3,00 de taxa de serviço · total R$ 23,00")).toBeVisible();
-  await expect(page.getByText("+ R$ 3,00 de taxa de serviço · total R$ 33,00")).toBeVisible();
+  await expect(page.getByText("+ R$ 3,00 de taxa de serviço por ingresso · total R$ 23,00")).toBeVisible();
+  await expect(page.getByText("+ R$ 3,00 de taxa de serviço por ingresso · total R$ 33,00")).toBeVisible();
   // Esta festa não tem camarote: a seção não aparece.
   await expect(page.getByRole("heading", { name: "Camarote" })).toHaveCount(0);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);

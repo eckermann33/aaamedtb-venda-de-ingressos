@@ -103,8 +103,11 @@ export const DEFAULT_CATEGORIES = [
  */
 export const DEFAULT_CAPACITY = 500;
 
-/** Taxa de serviço por ingresso (em centavos). Alterável no painel. */
-export const DEFAULT_SERVICE_FEE_CENTS = 300;
+/**
+ * Taxa de serviço cobrada POR INGRESSO (em centavos): um pedido com 3 ingressos paga 3 taxas.
+ * Alterável no painel; também é a sugestão do formulário "Começar nova festa".
+ */
+export const DEFAULT_SERVICE_FEE_CENTS = 500;
 
 /** Máximo de ingressos (pessoas) em um único pedido. */
 export const MAX_TICKETS_PER_ORDER = 10;

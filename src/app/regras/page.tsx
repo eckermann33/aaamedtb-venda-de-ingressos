@@ -69,8 +69,9 @@ export default async function RulesPage() {
 
           <h2>Valores e taxa de serviço</h2>
           <p>
-            O preço de cada categoria e a taxa de serviço são exibidos separadamente antes do pagamento. O comprador
-            paga exatamente o total exibido, em parcela única no cartão de crédito ou via Pix.
+            O preço de cada categoria e a taxa de serviço são exibidos separadamente antes do pagamento. A taxa de
+            serviço é cobrada por ingresso: num pedido com vários ingressos, cada um paga a sua taxa. O comprador paga
+            exatamente o total exibido, em parcela única no cartão de crédito ou via Pix.
           </p>
 
           <h2>Camarote</h2>

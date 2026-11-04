@@ -7,7 +7,7 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Camada | Ferramenta | Resultado |
 | --- | --- | --- |
 | Tipos (TypeScript) | `npm run typecheck` | ✅ sem erros |
-| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 97/97 |
+| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 98/98 |
 | Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 29/29 |
 | Build de produção | `npm run build` | ✅ |
 

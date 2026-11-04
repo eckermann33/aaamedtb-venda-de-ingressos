@@ -29,6 +29,7 @@ test("nova festa: arquiva a Party do Saco Cheio e o site passa a mostrar a Chopa
   await expect(page.getByLabel("Nome da festa")).toHaveValue("Chopada Final da Invictus");
   await expect(page.getByLabel("Data")).toHaveValue("2026-11-21");
   await expect(page.getByLabel("Cartaz", { exact: true })).toHaveValue("/images/cartaz-chopada-final.webp");
+  await expect(page.getByLabel("Taxa de serviço por ingresso (R$)")).toHaveValue("5,00");
   const start = page.getByRole("button", { name: "Começar nova festa" });
   await expect(start).toBeDisabled();
   await page.getByLabel(/Digite NOVA FESTA/).fill("nova festa");
@@ -66,6 +67,12 @@ test("nova festa: arquiva a Party do Saco Cheio e o site passa a mostrar a Chopa
     .first()
     .click();
   await expect(page.getByText(/Configurações salvas|Salvo/)).toBeVisible();
-  const [s] = await db`SELECT event->>'titleTop' AS top, event->>'poster' AS poster, edition FROM settings`;
-  expect(s).toMatchObject({ top: "Chopada", poster: "/images/cartaz-chopada-final.webp", edition: 2 });
+  const [s] =
+    await db`SELECT event->>'titleTop' AS top, event->>'poster' AS poster, edition, service_fee_cents FROM settings`;
+  expect(s).toMatchObject({
+    top: "Chopada",
+    poster: "/images/cartaz-chopada-final.webp",
+    edition: 2,
+    service_fee_cents: 500,
+  });
 });

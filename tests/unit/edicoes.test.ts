@@ -43,6 +43,7 @@ const chopada: NewEditionInput = {
   about: "Open chop e DJ HS.",
   camarote: "",
   capacity: 2,
+  serviceFeeCents: 500,
   deactivateCategories: false,
 };
 
@@ -78,6 +79,7 @@ describe("nova festa (edições)", () => {
     expect(s.edition).toBe(2);
     expect(s.event.name).toBe("Chopada Final da Invictus");
     expect(s.event.poster).toBe("/images/cartaz-chopada-final.webp");
+    expect(s.serviceFeeCents).toBe(500);
     expect(s.event.contactPhone).toBe(before.event.contactPhone); // o resto da configuração é mantido
     expect(s.event.organizer).toBe(before.event.organizer);
 
@@ -98,6 +100,22 @@ describe("nova festa (edições)", () => {
     expect(archived).toHaveLength(1);
     expect(archived[0]).toMatchObject({ edition: 1, confirmed: 2 });
     expect((await archivedEvent(sql(), 1))!.name).toBe("Party do Saco Cheio");
+  });
+
+  it("taxa de R$ 5 cobrada por ingresso: pedido de 2 ingressos paga 2 taxas", async () => {
+    await newEdition();
+    const lead = await createPurchase(
+      deps(mp),
+      request(terms, {
+        fullName: "Pessoa Nova Um",
+        extraTickets: [{ fullName: "Pessoa Nova Dois", categoryId: "masculino" }],
+      }),
+    );
+    expect(lead.fee_cents).toBe(500);
+    const fee = mp.prefCalls[0].items.find((i) => i.id === "taxa-servico");
+    expect(fee).toMatchObject({ quantity: 2, unitPriceCents: 500 });
+    const total = mp.prefCalls[0].items.reduce((n, i) => n + i.quantity * i.unitPriceCents, 0);
+    expect(total).toBe(2000 + 3000 + 2 * 500);
   });
 
   it("ingresso manual e da Atlética entram na festa atual", async () => {

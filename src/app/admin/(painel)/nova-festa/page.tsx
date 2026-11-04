@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DEFAULT_EVENT } from "@/config/event";
+import { DEFAULT_EVENT, DEFAULT_SERVICE_FEE_CENTS } from "@/config/event";
 import { eventDateParts } from "@/lib/dates";
 import { posterOf } from "@/lib/event-display";
 import { getSql } from "@/server/db";
@@ -68,6 +68,9 @@ export default async function NewEditionPage() {
             about: next?.about ?? "",
             camarote: next?.camarote ?? "",
             capacity: settings.capacity === null ? "" : String(settings.capacity),
+            serviceFee: ((next ? DEFAULT_SERVICE_FEE_CENTS : settings.serviceFeeCents) / 100)
+              .toFixed(2)
+              .replace(".", ","),
           }}
           posters={listPosters()}
           salesOpen={settings.salesOpen}

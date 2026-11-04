@@ -20,6 +20,8 @@ export type NewEditionInput = Pick<
   | "camarote"
 > & {
   capacity: number | null;
+  /** Taxa de serviço por ingresso, em centavos. */
+  serviceFeeCents: number;
   /** Desativa as categorias até a organização definir os preços da nova festa. */
   deactivateCategories: boolean;
 };
@@ -42,7 +44,7 @@ export async function startNewEdition(sql: Sql, input: NewEditionInput): Promise
     if (settings.salesOpen) {
       throw new PurchaseError("sales_open", "Feche as vendas da festa atual antes de começar uma nova.", 409);
     }
-    const { capacity, deactivateCategories, ...fields } = input;
+    const { capacity, serviceFeeCents, deactivateCategories, ...fields } = input;
     await tx`
       INSERT INTO editions_archive (edition, event) VALUES (${settings.edition}, ${tx.json(settings.event as never)})
       ON CONFLICT (edition) DO UPDATE SET event = EXCLUDED.event, archived_at = now()
@@ -50,6 +52,7 @@ export async function startNewEdition(sql: Sql, input: NewEditionInput): Promise
     const event: EventInfo = { ...settings.event, ...fields, endTime: null };
     const [row] = await tx<{ edition: number }[]>`
       UPDATE settings SET edition = edition + 1, event = ${tx.json(event as never)}, capacity = ${capacity},
+        service_fee_cents = ${serviceFeeCents},
         sales_open = false, updated_at = now()
       WHERE id = 1
       RETURNING edition
