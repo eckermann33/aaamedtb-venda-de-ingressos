@@ -44,6 +44,9 @@ export type PurchaseRow = {
   entry_code: string | null;
   checked_in_at: Date | null;
   checked_in_by: string | null;
+  /** Removido da lista pelo painel (sem estorno): data e motivo. */
+  removed_at: Date | null;
+  removed_reason: string | null;
   last_checked_at: Date | null;
   terms_version_id: number;
   terms_accepted_at: Date;
@@ -422,7 +425,8 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
 
     switch (payment.status) {
       case "approved": {
-        if (purchase.status === "confirmed" || purchase.status === "refunded") {
+        // Ingresso removido pelo painel conta como já tratado: um aviso repetido não o devolve à lista.
+        if (purchase.status === "confirmed" || purchase.status === "refunded" || purchase.removed_at) {
           if (isConfirmingPayment) return "already_confirmed" as const;
           // Segundo pagamento aprovado para a mesma compra: precisa ser estornado.
           await tx`UPDATE purchases SET attention = 'duplicate_payment', updated_at = now() WHERE id = ${purchase.id}`;
@@ -455,7 +459,7 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
               confirmed_at = ${confirmedAt},
               attention = CASE WHEN attention IN ('over_capacity', 'amount_mismatch') THEN NULL ELSE attention END,
               updated_at = now()
-            WHERE id = ${t.id} AND status <> 'confirmed'
+            WHERE id = ${t.id} AND status <> 'confirmed' AND removed_at IS NULL
           `;
         }
         logger.info("Compra confirmada", { purchaseId, paymentId, tickets: orderSize });
@@ -464,11 +468,11 @@ export async function applyPayment(sql: Sql, payment: MpPayment): Promise<ApplyR
 
       case "refunded":
       case "charged_back": {
-        if (isConfirmingPayment && purchase.status === "confirmed") {
+        if (isConfirmingPayment && (purchase.status === "confirmed" || purchase.removed_at)) {
           await tx`
             UPDATE purchases SET status = 'refunded', payment_status = ${payment.status},
               payment_status_detail = ${payment.status_detail ?? null}, refunded_at = now(), updated_at = now()
-            WHERE ${inOrder} AND status = 'confirmed'
+            WHERE ${inOrder} AND (status = 'confirmed' OR removed_at IS NOT NULL)
           `;
           return "refunded" as const;
         }
@@ -855,7 +859,7 @@ export async function createManualTickets(sql: Sql, input: ManualTicketsInput): 
 /** Remove um ingresso manual da lista (ex.: lançado por engano). Libera a vaga. */
 export async function cancelManualTicket(sql: Sql, id: string): Promise<PurchaseRow> {
   const rows = await sql<PurchaseRow[]>`
-    UPDATE purchases SET status = 'cancelled', updated_at = now()
+    UPDATE purchases SET status = 'cancelled', removed_at = now(), removed_reason = 'Ingresso manual removido', updated_at = now()
     WHERE id = ${id} AND source = 'manual' AND status = 'confirmed'
     RETURNING *
   `;
@@ -951,5 +955,52 @@ export async function createAthleticTickets(sql: Sql, names: string[]): Promise<
     note: "Diretoria da Atlética",
     athletic: true,
     label: "Atlética",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Remover ingresso da lista (qualquer origem) e restaurar.
+// ---------------------------------------------------------------------------
+
+/**
+ * Tira um ingresso confirmado da lista de entrada e da lotação, com o motivo. NÃO devolve o
+ * dinheiro (para isso existe o estorno pelo Mercado Pago). Num pedido com vários ingressos,
+ * remove só este; os outros continuam valendo. O QR Code deixa de valer na portaria.
+ */
+export async function removeTicket(sql: Sql, id: string, reason: string): Promise<PurchaseRow> {
+  const text = reason.trim().slice(0, 200);
+  if (text.length < 3) throw new PurchaseError("invalid_reason", "Informe o motivo da remoção.", 400);
+  const rows = await sql<PurchaseRow[]>`
+    UPDATE purchases SET status = 'cancelled', removed_at = now(), removed_reason = ${text}, updated_at = now()
+    WHERE id = ${id} AND status = 'confirmed'
+    RETURNING *
+  `;
+  if (!rows[0]) throw new PurchaseError("not_removable", "Só ingressos confirmados podem ser removidos.", 409);
+  return rows[0];
+}
+
+/** Desfaz a remoção: o ingresso volta para a lista, se ainda houver vaga na lotação. */
+export async function restoreTicket(sql: Sql, id: string): Promise<PurchaseRow> {
+  return sql.begin(async (tx) => {
+    const settings = await loadSettings(tx, { forUpdate: true });
+    const [row] = await tx<PurchaseRow[]>`SELECT * FROM purchases WHERE id = ${id} FOR UPDATE`;
+    if (!row || row.status !== "cancelled" || !row.removed_at) {
+      throw new PurchaseError("not_restorable", "Este ingresso não foi removido pelo painel.", 409);
+    }
+    if (row.edition === settings.edition && settings.capacity !== null) {
+      if ((await countOccupied(tx, null)) >= settings.capacity) {
+        throw new PurchaseError(
+          "not_enough",
+          "A lotação está completa. Aumente o limite em Configurações para restaurar.",
+          409,
+        );
+      }
+    }
+    const [restored] = await tx<PurchaseRow[]>`
+      UPDATE purchases SET status = 'confirmed', removed_at = NULL, removed_reason = NULL, updated_at = now()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    return restored;
   });
 }

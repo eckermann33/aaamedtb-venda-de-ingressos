@@ -14,8 +14,9 @@ import {
   CamaroteForm,
   TicketLinkBox,
   UndoCheckInButton,
-  CancelManualButton,
   RefundButton,
+  RemoveTicketForm,
+  RestoreTicketButton,
   TransferForm,
 } from "../../actions";
 
@@ -61,7 +62,11 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
       </p>
       <h1 className="admin-title">{p.full_name}</h1>
       <p className="admin-sub">
-        <StatusBadge status={p.status} />{" "}
+        {p.removed_at ? (
+          <span className="badge badge-muted">Removido da lista</span>
+        ) : (
+          <StatusBadge status={p.status} />
+        )}{" "}
         {p.attention && <span className="badge badge-warn">⚠ {ATTENTION_LABEL[p.attention]}</span>}{" "}
         {pastEdition && <span className="badge badge-muted">Festa anterior (nº {p.edition})</span>}
       </p>
@@ -246,13 +251,32 @@ export default async function PurchaseDetail(props: PageProps<"/admin/compras/[i
         </div>
       )}
 
-      {manual && p.status === "confirmed" && (
+      {p.status === "confirmed" && (
         <div className="panel">
           <h2>Remover da lista</h2>
           <p className="hint">
-            Use se o ingresso foi lançado por engano. A vaga é liberada e o nome sai da lista de entrada.
+            O nome sai da lista de entrada, a vaga é liberada e o QR Code deixa de valer. Fica registrado com o motivo e
+            dá para restaurar depois.
+            {!manual && (
+              <>
+                {" "}
+                <strong>Não devolve o dinheiro</strong>: para devolver pelo Mercado Pago, use Estornar acima.
+              </>
+            )}
+            {order.length > 1 && " Remove só este ingresso; os outros do pedido continuam valendo."}
           </p>
-          <CancelManualButton purchaseId={p.id} name={p.full_name} />
+          <RemoveTicketForm purchaseId={p.id} name={p.full_name} online={!manual} />
+        </div>
+      )}
+
+      {p.removed_at && p.status === "cancelled" && (
+        <div className="panel">
+          <h2>Ingresso removido</h2>
+          <p>
+            Removido em {formatDateTime(p.removed_at)}
+            {p.removed_reason && <> · Motivo: {p.removed_reason}</>}
+          </p>
+          <RestoreTicketButton purchaseId={p.id} />
         </div>
       )}
 

@@ -593,6 +593,30 @@ test.describe("painel administrativo", () => {
     expect(csv).toContain("Atlética;Presidente Joao Batista");
   });
 
+  test("remover ingresso do site da lista (sem estorno) e restaurar", async ({ page, request, baseURL }) => {
+    const p = await createPurchaseViaApi(request, baseURL!, { name: "Removida Pelo Painel" });
+    await payViaMock(p, "approved");
+    await loginAdmin(page);
+    page.on("dialog", (d) => d.accept());
+    await page.goto(`/admin/compras/${p.id}`);
+    const remove = page.getByRole("button", { name: "Remover da lista" });
+    await expect(remove).toBeDisabled(); // precisa do motivo
+    await page.getByLabel("Motivo").fill("Comprou duas vezes, devolvemos por Pix");
+    await remove.click();
+    await expect(page.getByRole("heading", { name: "Ingresso removido" })).toBeVisible();
+    await expect(page.getByText(/Motivo: Comprou duas vezes/)).toBeVisible();
+    await page.goto("/admin/lista");
+    await expect(page.locator(".print-list")).not.toContainText("Removida Pelo Painel");
+    const csv = await (await page.request.get("/api/admin/export?scope=all")).text();
+    expect(csv).toContain("Removido da lista: Comprou duas vezes");
+
+    await page.goto(`/admin/compras/${p.id}`);
+    await page.getByRole("button", { name: "Restaurar ingresso" }).click();
+    await expect(page.getByRole("heading", { name: "Remover da lista" })).toBeVisible();
+    await page.goto("/admin/lista");
+    await expect(page.locator(".print-list")).toContainText("Removida Pelo Painel");
+  });
+
   test("fechar vendas pelo painel e bloqueio de abertura com pendências", async ({ page }) => {
     await loginAdmin(page);
     page.on("dialog", (d) => d.accept());

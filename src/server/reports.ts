@@ -156,6 +156,8 @@ export type ListRow = {
   created_at: Date;
   confirmed_at: Date | null;
   checked_in_at: Date | null;
+  removed_at: Date | null;
+  removed_reason: string | null;
 };
 
 function likePattern(term: string): string {
@@ -192,7 +194,7 @@ export async function listPurchases(sql: Sql, f: ListFilters): Promise<{ rows: L
   const [{ total }] = await sql<{ total: number }[]>`SELECT count(*)::int AS total FROM purchases ${where}`;
   const rows = await sql<ListRow[]>`
     SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, athletic, camarote_extra_cents, note, lead_id,
-           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at, checked_in_at
+           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at, checked_in_at, removed_at, removed_reason
     FROM purchases ${where}
     ORDER BY ${order}
     LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
@@ -223,7 +225,7 @@ export async function officialList(sql: Sql, edition?: number): Promise<Official
 export async function allPurchases(sql: Sql, edition?: number): Promise<ListRow[]> {
   return sql<ListRow[]>`
     SELECT id, full_name, buyer_phone, category_label, amount_cents, fee_cents, payment_method, source, athletic, camarote_extra_cents, note, lead_id,
-           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at, checked_in_at
+           status, payment_status, attention, mp_payment_id, ticket_code, created_at, confirmed_at, checked_in_at, removed_at, removed_reason
     FROM purchases
     WHERE ${edition ? sql`edition = ${edition}` : sql`edition = current_edition()`}
     ORDER BY created_at ASC, full_name ASC

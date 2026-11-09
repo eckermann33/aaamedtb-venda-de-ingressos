@@ -317,6 +317,8 @@ Guarde o arquivo em local privado (ele contém nomes de participantes). A Railwa
 
 ---
 
+**Remover ingresso da lista:** painel → Compras → nome da pessoa → bloco **Remover da lista** → escreva o motivo → **Remover da lista**. Vale para ingresso do site, manual ou da Atlética: o nome sai da lista de entrada e do CSV oficial, a vaga é liberada e o QR Code deixa de valer. **Não devolve o dinheiro** — para devolver pelo Mercado Pago use **Estornar**. Num pedido com vários ingressos, remove só aquele. Errou? No mesmo lugar aparece **Restaurar ingresso** (se ainda houver vaga). A remoção fica na auditoria e no relatório de compras com o motivo.
+
 ### 8.1. Entrada por QR Code (opcional)
 
 Painel → **Portaria** → escolha o modelo de entrada. Dá para trocar quando quiser; os ingressos já vendidos valem nos dois modelos.

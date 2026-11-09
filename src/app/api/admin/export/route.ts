@@ -74,7 +74,9 @@ export async function GET(request: Request) {
         r.athletic ? "Atlética" : "Geral",
         r.camarote_extra_cents === null ? "" : money(r.camarote_extra_cents),
         r.note,
-        STATUS_LABEL[r.status] ?? r.status,
+        r.removed_at && r.status === "cancelled"
+          ? `Removido da lista${r.removed_reason ? `: ${r.removed_reason}` : ""}`
+          : (STATUS_LABEL[r.status] ?? r.status),
         r.payment_status,
         r.mp_payment_id,
         r.ticket_code,

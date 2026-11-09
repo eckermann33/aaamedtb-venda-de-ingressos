@@ -32,8 +32,15 @@ export default async function PurchasesPage(props: PageProps<"/admin/compras">) 
   const pages = Math.max(1, Math.ceil(total / 50));
   const link = (over: Record<string, string | number>) => {
     const params = new URLSearchParams();
-    const base: Record<string, string> = { q: str("q"), categoria: category ?? "", status: status ?? "", ordem: sort === "name" ? "nome" : "data", dir };
-    for (const [k, v] of Object.entries({ ...base, ...over })) if (v !== "" && v !== undefined) params.set(k, String(v));
+    const base: Record<string, string> = {
+      q: str("q"),
+      categoria: category ?? "",
+      status: status ?? "",
+      ordem: sort === "name" ? "nome" : "data",
+      dir,
+    };
+    for (const [k, v] of Object.entries({ ...base, ...over }))
+      if (v !== "" && v !== undefined) params.set(k, String(v));
     return `/admin/compras?${params}`;
   };
   const now = new Date();
@@ -46,7 +53,14 @@ export default async function PurchasesPage(props: PageProps<"/admin/compras">) 
       <form className="panel toolbar" style={{ marginTop: 0 }} method="get" role="search">
         <div className="field" style={{ flex: "2 1 220px" }}>
           <label htmlFor="q">Buscar por nome</label>
-          <input id="q" name="q" className="input" defaultValue={str("q")} placeholder="Ex.: maria silva" autoComplete="off" />
+          <input
+            id="q"
+            name="q"
+            className="input"
+            defaultValue={str("q")}
+            placeholder="Ex.: maria silva"
+            autoComplete="off"
+          />
         </div>
         <div className="field">
           <label htmlFor="categoria">Categoria</label>
@@ -115,7 +129,11 @@ export default async function PurchasesPage(props: PageProps<"/admin/compras">) 
               <tr key={r.id}>
                 <td className="name">
                   {r.full_name}
-                  {r.athletic && <span className="badge badge-muted" style={{ marginLeft: 8 }}>Atlética</span>}
+                  {r.athletic && (
+                    <span className="badge badge-muted" style={{ marginLeft: 8 }}>
+                      Atlética
+                    </span>
+                  )}
                   {r.attention && (
                     <div style={{ marginTop: 4 }}>
                       <AttentionBadge attention={r.attention} />
@@ -126,10 +144,20 @@ export default async function PurchasesPage(props: PageProps<"/admin/compras">) 
                 <td className="num">{formatBRL(r.amount_cents)}</td>
                 <td>{r.payment_method === "pix" ? "Pix" : r.payment_method === "card" ? "Cartão" : "Manual"}</td>
                 <td>
-                  <StatusBadge status={r.status} />
+                  {r.removed_at && r.status === "cancelled" ? (
+                    <span className="badge badge-muted">Removido</span>
+                  ) : (
+                    <StatusBadge status={r.status} />
+                  )}
                 </td>
                 <td>{r.payment_status ? (MP_STATUS_LABEL[r.payment_status] ?? r.payment_status) : "—"}</td>
-                <td>{r.confirmed_at ? formatDateTime(r.confirmed_at) : <span className="hint">criada {formatDateTime(r.created_at)}</span>}</td>
+                <td>
+                  {r.confirmed_at ? (
+                    formatDateTime(r.confirmed_at)
+                  ) : (
+                    <span className="hint">criada {formatDateTime(r.created_at)}</span>
+                  )}
+                </td>
                 <td>
                   <Link href={`/admin/compras/${r.id}`}>Detalhes</Link>
                 </td>
@@ -156,7 +184,9 @@ export default async function PurchasesPage(props: PageProps<"/admin/compras">) 
           )}
         </span>
       </nav>
-      <p className="hint" style={{ marginTop: 8 }}>Atualizado em {formatDateTime(now)}.</p>
+      <p className="hint" style={{ marginTop: 8 }}>
+        Atualizado em {formatDateTime(now)}.
+      </p>
     </>
   );
 }

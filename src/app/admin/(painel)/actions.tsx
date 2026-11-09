@@ -1019,3 +1019,66 @@ export function NewEditionForm({
     </form>
   );
 }
+
+/** Remove um ingresso confirmado da lista (sem estorno), pedindo o motivo. */
+export function RemoveTicketForm({ purchaseId, name, online }: { purchaseId: string; name: string; online: boolean }) {
+  const router = useRouter();
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="toolbar"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const warn = online ? "\n\nIsso NÃO devolve o dinheiro pelo Mercado Pago (para isso use Estornar)." : "";
+        if (!confirm(`Remover o ingresso de "${name}" da lista?${warn}`)) return;
+        setBusy(true);
+        setError(null);
+        const r = await post(`/api/admin/purchases/${purchaseId}/remove`, { reason });
+        setBusy(false);
+        if (!r.ok) return setError(r.data?.error?.message ?? "Erro ao remover.");
+        router.refresh();
+      }}
+    >
+      <div className="field" style={{ flex: "2 1 240px" }}>
+        <label htmlFor="remove-reason">Motivo</label>
+        <input
+          id="remove-reason"
+          className="input"
+          maxLength={200}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Ex.: comprou duas vezes, devolvemos por Pix"
+          autoComplete="off"
+        />
+      </div>
+      <button className="btn btn-danger btn-sm" style={{ minHeight: 46 }} disabled={busy || reason.trim().length < 3}>
+        {busy ? "Removendo…" : "Remover da lista"}
+      </button>
+      {error && <p className="field-error">{error}</p>}
+    </form>
+  );
+}
+
+/** Devolve à lista um ingresso removido pelo painel. */
+export function RestoreTicketButton({ purchaseId }: { purchaseId: string }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <span>
+      <button
+        className="btn btn-sm"
+        onClick={async () => {
+          if (!confirm("Devolver este ingresso para a lista de entrada?")) return;
+          const r = await post(`/api/admin/purchases/${purchaseId}/restore`);
+          if (!r.ok) setError(r.data?.error?.message ?? "Erro ao restaurar.");
+          router.refresh();
+        }}
+      >
+        Restaurar ingresso
+      </button>
+      {error && <span className="field-error"> {error}</span>}
+    </span>
+  );
+}
