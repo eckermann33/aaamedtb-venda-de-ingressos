@@ -9,7 +9,14 @@ export const db = postgres(E2E_DB, { max: 2, idle_timeout: 2, onnotice: () => {}
 /** Evento configurado e vendas abertas (dados de TESTE, nunca de produção). */
 export async function readyEvent(opts: { capacity?: number | null; salesOpen?: boolean } = {}) {
   await db`TRUNCATE payments, purchases, webhook_events, rate_limits, editions_archive RESTART IDENTITY CASCADE`;
-  await db`UPDATE ticket_categories SET active = true WHERE id IN ('feminino', 'masculino')`;
+  // Categorias usadas nos testes: feminino R$ 20 e masculino R$ 30 (as demais ficam inativas).
+  await db`UPDATE ticket_categories SET active = false`;
+  await db`
+    INSERT INTO ticket_categories (id, label, price_cents, active, sort_order)
+    VALUES ('feminino', 'Feminino', 2000, true, 1), ('masculino', 'Masculino', 3000, true, 2)
+    ON CONFLICT (id) DO UPDATE SET active = true, price_cents = EXCLUDED.price_cents, label = EXCLUDED.label,
+      sort_order = EXCLUDED.sort_order, description = NULL
+  `;
   const [terms] = await db<{ id: number }[]>`
     INSERT INTO terms_versions (content, content_hash)
     SELECT content || ${db.json({

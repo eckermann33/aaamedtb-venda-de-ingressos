@@ -30,7 +30,12 @@ export default async function BuyPage(props: PageProps<"/comprar">) {
           </div>
           {s.canBuy ? (
             <CheckoutForm
-              categories={s.categories.map((c) => ({ id: c.id, label: c.label, priceCents: c.priceCents }))}
+              categories={s.categories.map((c) => ({
+                id: c.id,
+                label: c.label,
+                priceCents: c.priceCents,
+                description: c.description,
+              }))}
               feeCents={s.serviceFeeCents}
               preselected={preselected}
               termsVersionId={s.termsVersionId}

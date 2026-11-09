@@ -9,7 +9,7 @@ import { formatPhone, phoneDigits } from "@/lib/contact";
 import { formatBRL } from "@/lib/money";
 import { AGE_TEXT, cleanName, validateFullName } from "@/lib/validation";
 
-type Category = { id: string; label: string; priceCents: number };
+type Category = { id: string; label: string; priceCents: number; description?: string | null };
 
 type Props = {
   categories: Category[];
@@ -269,6 +269,7 @@ export default function CheckoutForm({
                     <span className="choice-title">{c.id === CAMAROTE ? "Só o camarote" : c.label}</span>
                     <span className="choice-price">{formatBRL(c.priceCents)}</span>
                     {c.id === CAMAROTE && <span className="choice-sub">para quem já comprou o ingresso</span>}
+                    {c.description && <span className="choice-sub">{c.description}</span>}
                     {feeCents > 0 && <span className="choice-sub">+ {formatBRL(feeCents)} de taxa por ingresso</span>}
                   </span>
                   <span className="choice-check" aria-hidden>

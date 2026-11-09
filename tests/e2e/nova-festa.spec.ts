@@ -30,6 +30,11 @@ test("nova festa: arquiva a Party do Saco Cheio e o site passa a mostrar a Chopa
   await expect(page.getByLabel("Data")).toHaveValue("2026-11-21");
   await expect(page.getByLabel("Cartaz", { exact: true })).toHaveValue("/images/cartaz-chopada-final.webp");
   await expect(page.getByLabel("Taxa de serviço por ingresso (R$)")).toHaveValue("5,00");
+  await expect(page.getByLabel("Nome da categoria 1")).toHaveValue("Universitária feminina");
+  await expect(page.getByLabel("Preço da categoria 1")).toHaveValue("45,00");
+  await expect(page.getByLabel("Preço da categoria 2")).toHaveValue("55,00");
+  await expect(page.getByLabel("Preço da categoria 3")).toHaveValue("75,00");
+  await expect(page.getByLabel("Regras de entrada (uma por linha)")).toHaveValue(/carteira de estudante/);
   const start = page.getByRole("button", { name: "Começar nova festa" });
   await expect(start).toBeDisabled();
   await page.getByLabel(/Digite NOVA FESTA/).fill("nova festa");
@@ -37,13 +42,20 @@ test("nova festa: arquiva a Party do Saco Cheio e o site passa a mostrar a Chopa
   await expect(page.getByText(/A festa nº 2 começou/)).toBeVisible();
   await expect(page.getByRole("row", { name: /Party do Saco Cheio/ })).toContainText("1");
 
-  // Site da nova festa: título, cartaz, sem camarote e sem preços ainda.
+  // Site da nova festa: título, cartaz, cor roxa, local, categorias universitárias e sem camarote.
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Chopada\s*Final/i })).toBeVisible();
   await expect(page.locator(".poster-mobile img")).toHaveAttribute("src", "/images/cartaz-chopada-final.webp");
-  await expect(page.getByText("Valores em breve.")).toBeVisible();
-  await expect(page.locator("article.ticket")).toHaveCount(0);
+  await expect(page.locator("body")).toHaveAttribute("data-accent", "");
+  await expect(page.getByText("Sítio Contatto").first()).toBeVisible();
+  await expect(page.locator("article.ticket")).toHaveCount(3);
+  await expect(page.locator("article.ticket").first()).toContainText("Universitária feminina");
+  await expect(page.locator("article.ticket").first()).toContainText("45,00");
+  await expect(page.locator("article.ticket").first()).toContainText("Com carteira de estudante na entrada");
+  await expect(page.locator("article.ticket").nth(2)).toContainText("75,00");
+  await expect(page.getByText("+ R$ 5,00 de taxa de serviço por ingresso · total R$ 50,00")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Camarote" })).toHaveCount(0);
+  await expect(page.getByText(/Pulseira universitária \(preço especial\)/)).toBeVisible();
   await expect(page.getByText("Vendas em breve").first()).toBeVisible();
   await expect(page).toHaveTitle(/Chopada Final da Invictus/);
 

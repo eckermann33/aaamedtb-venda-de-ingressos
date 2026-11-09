@@ -44,7 +44,13 @@ const chopada: NewEditionInput = {
   camarote: "",
   capacity: 2,
   serviceFeeCents: 500,
-  deactivateCategories: false,
+  accent: "#a63cff",
+  categories: [
+    { id: "feminino", label: "Feminino", priceCents: 2000, description: null },
+    { id: "masculino", label: "Masculino", priceCents: 3000, description: null },
+  ],
+  activateCategories: true,
+  rules: ["Regra de teste da nova festa"],
 };
 
 async function paid(name: string) {
@@ -57,6 +63,8 @@ async function newEdition(input: NewEditionInput = chopada) {
   await sql()`UPDATE settings SET sales_open = false`;
   const edition = await startNewEdition(sql(), input);
   await sql()`UPDATE settings SET sales_open = true`;
+  // A nova festa grava as regras dela como uma nova versão dos termos.
+  terms = (await loadSettings(sql())).termsVersionId;
   return edition;
 }
 
@@ -155,8 +163,38 @@ describe("nova festa (edições)", () => {
     await expectError(createPurchase(deps(mp), request(terms)), "not_ready");
   });
 
+  it("grava categorias com aviso, regras novas e cor de destaque da nova festa", async () => {
+    const before = await loadSettings(sql());
+    await newEdition({
+      ...chopada,
+      categories: [
+        {
+          id: "universitaria-feminina",
+          label: "Universitária feminina",
+          priceCents: 4500,
+          description: "Com carteira",
+        },
+        { id: "geral", label: "Geral (não universitário)", priceCents: 7500, description: null },
+      ],
+      rules: ["Regra um da chopada", "Regra dois da chopada"],
+    });
+    const s = await loadSettings(sql());
+    const active = s.categories.filter((c) => c.active);
+    expect(active.map((c) => [c.id, c.priceCents, c.description])).toEqual([
+      ["universitaria-feminina", 4500, "Com carteira"],
+      ["geral", 7500, null],
+    ]);
+    expect(s.categories.find((c) => c.id === "feminino")!.active).toBe(false);
+    expect(s.terms.rules).toEqual(["Regra um da chopada", "Regra dois da chopada"]);
+    expect(s.terms.refundPolicy).toBe(before.terms.refundPolicy); // políticas mantidas
+    expect(s.termsVersionId).not.toBe(before.termsVersionId);
+    expect(s.event.accent).toBe("#a63cff");
+    const lead = await createPurchase(deps(mp), request(terms, { categoryId: "geral" }));
+    expect(lead.amount_cents).toBe(7500 + 500);
+  });
+
   it("pode desativar as categorias até definir os preços", async () => {
-    await newEdition({ ...chopada, deactivateCategories: true });
+    await newEdition({ ...chopada, activateCategories: false });
     const s = await loadSettings(sql());
     expect(s.categories.every((c) => !c.active)).toBe(true);
     await sql()`UPDATE settings SET sales_open = true`;

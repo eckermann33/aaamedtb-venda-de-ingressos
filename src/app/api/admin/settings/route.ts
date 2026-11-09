@@ -6,7 +6,7 @@ import { requireAdminApi } from "@/server/auth";
 import { getSql } from "@/server/db";
 import { envState } from "@/server/deps";
 import { errorResponse, json, readJson } from "@/server/http";
-import { loadSettings, readiness, upsertTermsVersion } from "@/server/settings";
+import { loadSettings, readiness, saveCategories, upsertTermsVersion } from "@/server/settings";
 
 const text = (max: number) =>
   z
@@ -21,6 +21,12 @@ const schema = z.object({
     name: z.string().trim().min(2).max(80),
     titleTop: text(40).optional(),
     titleMain: text(40).optional(),
+    accent: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, "Cor no formato #RRGGBB")
+      .nullable()
+      .or(z.literal("").transform(() => null))
+      .optional(),
     poster: z
       .string()
       .regex(POSTER_PATTERN, "Escolha um cartaz da lista")
@@ -85,6 +91,7 @@ const schema = z.object({
         priceCents: z.number().int().min(100).max(100000),
         active: z.boolean(),
         sortOrder: z.number().int().min(0).max(100),
+        description: text(160).optional(),
       }),
     )
     .min(1)
@@ -116,17 +123,7 @@ export async function PUT(request: Request) {
         updated_at = now()
       WHERE id = 1
     `;
-    for (const c of data.categories) {
-      await tx`
-        INSERT INTO ticket_categories (id, label, price_cents, active, sort_order)
-        VALUES (${c.id}, ${c.label}, ${c.priceCents}, ${c.active}, ${c.sortOrder})
-        ON CONFLICT (id) DO UPDATE SET
-          label = EXCLUDED.label, price_cents = EXCLUDED.price_cents,
-          active = EXCLUDED.active, sort_order = EXCLUDED.sort_order, updated_at = now()
-      `;
-    }
-    // Categorias removidas do formulário ficam inativas (o histórico de compras é preservado).
-    await tx`UPDATE ticket_categories SET active = false, updated_at = now() WHERE id <> ALL(${[...ids]})`;
+    await saveCategories(tx, data.categories);
 
     const after = await loadSettings(tx);
     // Se algo obrigatório foi apagado com as vendas abertas, fecha as vendas por segurança.

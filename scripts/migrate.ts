@@ -6,7 +6,13 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import postgres from "postgres";
-import { DEFAULT_CAPACITY, DEFAULT_CATEGORIES, DEFAULT_EVENT, DEFAULT_SERVICE_FEE_CENTS, DEFAULT_TERMS } from "../src/config/event";
+import {
+  DEFAULT_CAPACITY,
+  DEFAULT_CATEGORIES,
+  DEFAULT_EVENT,
+  DEFAULT_SERVICE_FEE_CENTS,
+  DEFAULT_TERMS,
+} from "../src/config/event";
 
 if (existsSync(".env")) process.loadEnvFile(".env");
 
@@ -38,7 +44,9 @@ function termsHash(content: typeof DEFAULT_TERMS) {
 async function main() {
   await sql`CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`;
   const dir = path.join(process.cwd(), "migrations");
-  const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+  const files = readdirSync(dir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
   const applied = new Set((await sql<{ name: string }[]>`SELECT name FROM schema_migrations`).map((r) => r.name));
 
   for (const file of files) {
@@ -66,8 +74,8 @@ async function main() {
       `;
       for (const c of DEFAULT_CATEGORIES) {
         await tx`
-          INSERT INTO ticket_categories (id, label, price_cents, sort_order)
-          VALUES (${c.id}, ${c.label}, ${c.priceCents}, ${c.sortOrder})
+          INSERT INTO ticket_categories (id, label, price_cents, sort_order, description)
+          VALUES (${c.id}, ${c.label}, ${c.priceCents}, ${c.sortOrder}, ${c.description})
           ON CONFLICT (id) DO NOTHING
         `;
       }

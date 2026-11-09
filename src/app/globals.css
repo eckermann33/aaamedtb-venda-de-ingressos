@@ -2357,3 +2357,152 @@ table.data tr:hover td {
   font-size: 1.2rem;
   min-height: 64px;
 }
+
+/* ---------------------------------------------------------------------------
+   Cor de destaque da festa (configurável no painel, ex.: o roxo do cartaz da
+   Chopada Final). Sem cor definida, nada abaixo se aplica e o site fica verde.
+   ------------------------------------------------------------------------ */
+[data-accent] .satin::after {
+  background:
+    linear-gradient(
+      62deg,
+      transparent 28%,
+      rgba(var(--accent-rgb), 0.35) 36%,
+      rgba(var(--accent-rgb), 0.75) 40%,
+      rgba(var(--accent-rgb), 0.3) 44%,
+      transparent 52%
+    ),
+    radial-gradient(42% 36% at 12% 28%, rgba(var(--accent-rgb), 0.45), transparent 70%),
+    radial-gradient(30% 30% at 80% 85%, rgba(var(--accent-rgb), 0.3), transparent 70%);
+  opacity: 0.6;
+}
+
+[data-accent] .label {
+  color: var(--accent);
+  text-shadow: 0 0 14px rgba(var(--accent-rgb), 0.35);
+}
+
+[data-accent] .label-line::before {
+  background: linear-gradient(90deg, transparent, var(--accent));
+}
+
+[data-accent] .label-line::after {
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+
+[data-accent] .title-party {
+  text-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.35),
+    0 0 30px rgba(var(--accent-rgb), 0.6);
+}
+
+/* Frase do cartaz numa faixa, como "DA INVICTUS" no cartaz. */
+[data-accent] .hero .hand {
+  display: inline-block;
+  padding: 6px 16px 8px;
+  border-radius: 6px;
+  background: linear-gradient(100deg, rgba(var(--accent-rgb), 0.95), rgba(var(--accent-rgb), 0.7));
+  box-shadow: 0 0 26px rgba(var(--accent-rgb), 0.45);
+}
+
+[data-accent] .brush-underline {
+  background: linear-gradient(90deg, transparent 0%, var(--neon) 8%, var(--neon) 45%, var(--accent) 70%, transparent 100%);
+  box-shadow:
+    0 0 18px var(--neon-glow),
+    0 0 24px rgba(var(--accent-rgb), 0.35);
+}
+
+[data-accent] .date-stamp .month {
+  color: var(--accent);
+  text-shadow: 0 0 16px rgba(var(--accent-rgb), 0.55);
+}
+
+[data-accent] .poster-frame {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow:
+    0 0 0 6px rgba(var(--accent-rgb), 0.1),
+    0 30px 80px rgba(0, 0, 0, 0.7),
+    -30px 0 90px rgba(var(--accent-rgb), 0.35),
+    30px 0 90px rgba(141, 224, 59, 0.2);
+}
+
+[data-accent] .partners-row .x {
+  color: var(--accent);
+}
+
+[data-accent] .ticket {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(var(--accent-rgb), 0.22), transparent 55%),
+    radial-gradient(90% 90% at 100% 100%, rgba(141, 224, 59, 0.1), transparent 60%),
+    linear-gradient(160deg, #16101d, #09080b);
+}
+
+[data-accent] .ticket-stub {
+  border-left-color: rgba(var(--accent-rgb), 0.45);
+}
+
+[data-accent] .ticket-stub::before,
+[data-accent] .ticket-stub::after {
+  border-color: rgba(var(--accent-rgb), 0.45);
+}
+
+[data-accent] .fact,
+[data-accent] .steps li {
+  border-color: rgba(var(--accent-rgb), 0.28);
+}
+
+[data-accent] .site-footer h2 {
+  color: var(--accent);
+}
+
+[data-accent] .btn-ghost {
+  border-color: rgba(var(--accent-rgb), 0.55);
+}
+
+/* Aviso da categoria (ex.: "Com carteira de estudante na entrada"). */
+.ticket-desc {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  color: var(--cream);
+}
+
+.ticket-desc::before {
+  content: "★ ";
+  color: var(--neon);
+}
+
+[data-accent] .ticket-desc::before {
+  color: var(--accent);
+}
+
+/* Com 3 ou mais categorias (nomes longos como "Universitária feminina"), o botão vai para baixo
+   do card em vez de ficar ao lado, para o nome ocupar a largura toda sem quebrar palavras. */
+.ticket {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.tickets:has(> .ticket:nth-child(3)) .ticket {
+  grid-template-columns: minmax(0, 1fr);
+  /* Botões alinhados na base, mesmo com textos de tamanhos diferentes. */
+  grid-template-rows: 1fr auto;
+}
+
+.tickets:has(> .ticket:nth-child(3)) .ticket-stub {
+  border-left: 0;
+  border-top: 2px dashed rgba(141, 224, 59, 0.35);
+  padding: 14px 24px 18px;
+}
+
+[data-accent] .tickets:has(> .ticket:nth-child(3)) .ticket-stub {
+  border-top-color: rgba(var(--accent-rgb), 0.45);
+}
+
+.tickets:has(> .ticket:nth-child(3)) .ticket-stub::before,
+.tickets:has(> .ticket:nth-child(3)) .ticket-stub::after {
+  display: none;
+}
+
+.tickets:has(> .ticket:nth-child(3)) .ticket-stub .btn {
+  width: 100%;
+}

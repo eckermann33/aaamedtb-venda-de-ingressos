@@ -1,7 +1,7 @@
 import type { EventInfo } from "@/config/event";
 import type { Sql } from "./db";
 import { PurchaseError } from "./purchases";
-import { loadSettings } from "./settings";
+import { loadSettings, saveCategories, upsertTermsVersion } from "./settings";
 
 /** Dados da nova festa informados no painel (o resto da configuração é mantido). */
 export type NewEditionInput = Pick<
@@ -10,6 +10,7 @@ export type NewEditionInput = Pick<
   | "titleTop"
   | "titleMain"
   | "poster"
+  | "accent"
   | "tagline"
   | "date"
   | "startTime"
@@ -22,8 +23,12 @@ export type NewEditionInput = Pick<
   capacity: number | null;
   /** Taxa de serviço por ingresso, em centavos. */
   serviceFeeCents: number;
-  /** Desativa as categorias até a organização definir os preços da nova festa. */
-  deactivateCategories: boolean;
+  /** Categorias e preços da nova festa (as que não estiverem aqui ficam inativas). */
+  categories: { id: string; label: string; priceCents: number; description: string | null }[];
+  /** false = categorias gravadas mas inativas (o site mostra "Valores em breve"). */
+  activateCategories: boolean;
+  /** Regras de entrada da nova festa (uma por item); as políticas de reembolso etc. são mantidas. */
+  rules: string[];
 };
 
 export type ArchivedEdition = {
@@ -44,20 +49,24 @@ export async function startNewEdition(sql: Sql, input: NewEditionInput): Promise
     if (settings.salesOpen) {
       throw new PurchaseError("sales_open", "Feche as vendas da festa atual antes de começar uma nova.", 409);
     }
-    const { capacity, serviceFeeCents, deactivateCategories, ...fields } = input;
+    const { capacity, serviceFeeCents, categories, activateCategories, rules, ...fields } = input;
     await tx`
       INSERT INTO editions_archive (edition, event) VALUES (${settings.edition}, ${tx.json(settings.event as never)})
       ON CONFLICT (edition) DO UPDATE SET event = EXCLUDED.event, archived_at = now()
     `;
     const event: EventInfo = { ...settings.event, ...fields, endTime: null };
+    const termsVersionId = await upsertTermsVersion(tx, { ...settings.terms, rules });
     const [row] = await tx<{ edition: number }[]>`
       UPDATE settings SET edition = edition + 1, event = ${tx.json(event as never)}, capacity = ${capacity},
-        service_fee_cents = ${serviceFeeCents},
+        service_fee_cents = ${serviceFeeCents}, current_terms_version_id = ${termsVersionId},
         sales_open = false, updated_at = now()
       WHERE id = 1
       RETURNING edition
     `;
-    if (deactivateCategories) await tx`UPDATE ticket_categories SET active = false, updated_at = now()`;
+    await saveCategories(
+      tx,
+      categories.map((c, i) => ({ ...c, active: activateCategories, sortOrder: i + 1 })),
+    );
     // Leitores da portaria abertos na festa anterior precisam entrar de novo.
     await tx`DELETE FROM door_sessions`;
     return row.edition;

@@ -7,7 +7,14 @@ import { IconAlert, IconCheck } from "@/components/icons";
 import { posterOf } from "@/lib/event-display";
 import { formatBRL } from "@/lib/money";
 
-type Category = { id: string; label: string; priceCents: number; active: boolean; sortOrder: number };
+type Category = {
+  id: string;
+  label: string;
+  priceCents: number;
+  active: boolean;
+  sortOrder: number;
+  description: string | null;
+};
 type Initial = {
   event: EventInfo;
   capacity: number | null;
@@ -83,6 +90,7 @@ export default function SettingsForm({
       priceCents: toCents(c.price),
       active: c.active,
       sortOrder: i + 1,
+      description: c.description?.trim() ? c.description.trim() : null,
     }));
     if (!Number.isFinite(feeCents) || categories.some((c) => !Number.isFinite(c.priceCents))) {
       setStatus({ ok: false, msg: "Confira os valores (use o formato 20,00)." });
@@ -133,6 +141,21 @@ export default function SettingsForm({
           {text("tagline", "Frase do cartaz")}
           {text("titleTop", "Título na página: linha menor", { placeholder: "Ex.: Chopada" })}
           {text("titleMain", "Título na página: linha de destaque", { placeholder: "Ex.: Final" })}
+          <div className="field">
+            <label htmlFor="s-accent">Cor de destaque (combinando com o cartaz)</label>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <input
+                id="s-accent"
+                type="color"
+                value={event.accent ?? "#8de03b"}
+                onChange={(e) => set("accent", e.target.value)}
+                style={{ width: 56, height: 44, padding: 0, border: 0, background: "transparent" }}
+              />
+              <button type="button" className="back-link" onClick={() => set("accent", null)}>
+                só verde
+              </button>
+            </div>
+          </div>
           <div className="field span-2">
             <label htmlFor="s-poster">Cartaz</label>
             <select
@@ -192,6 +215,7 @@ export default function SettingsForm({
                 <th>Identificador</th>
                 <th>Nome</th>
                 <th>Preço (R$)</th>
+                <th>Aviso no site (opcional)</th>
                 <th>Ativa</th>
                 <th />
               </tr>
@@ -236,6 +260,19 @@ export default function SettingsForm({
                   </td>
                   <td>
                     <input
+                      className="input"
+                      style={{ minHeight: 40, width: 220 }}
+                      maxLength={160}
+                      value={c.description ?? ""}
+                      placeholder="Ex.: Com carteira de estudante"
+                      onChange={(e) =>
+                        setCats((all) => all.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))
+                      }
+                      aria-label="Aviso da categoria"
+                    />
+                  </td>
+                  <td>
+                    <input
                       type="checkbox"
                       checked={c.active}
                       onChange={(e) =>
@@ -266,7 +303,15 @@ export default function SettingsForm({
           onClick={() =>
             setCats((all) => [
               ...all,
-              { id: "", label: "", price: "", priceCents: 0, active: true, sortOrder: all.length + 1 },
+              {
+                id: "",
+                label: "",
+                price: "",
+                priceCents: 0,
+                active: true,
+                sortOrder: all.length + 1,
+                description: null,
+              },
             ])
           }
         >

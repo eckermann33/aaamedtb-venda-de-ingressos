@@ -769,21 +769,41 @@ type NewEditionValues = {
   camarote: string;
   capacity: string;
   serviceFee: string;
+  accent: string;
+  rules: string;
 };
+
+export type NewEditionCategory = { id: string; label: string; price: string; description: string };
+
+/** Identificador da categoria a partir do nome (ex.: "Universitário masculino" → "universitario-masculino"). */
+function slugify(label: string): string {
+  return label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
+}
 
 /** Formulário da nova festa: arquiva a atual e configura a próxima. */
 export function NewEditionForm({
   initial,
+  initialCategories,
   posters,
   salesOpen,
 }: {
   initial: NewEditionValues;
+  initialCategories: NewEditionCategory[];
   posters: string[];
   salesOpen: boolean;
 }) {
   const router = useRouter();
   const [v, setV] = useState(initial);
-  const [deactivate, setDeactivate] = useState(true);
+  const [cats, setCats] = useState(initialCategories);
+  const [activate, setActivate] = useState(initialCategories.length > 0);
+  const setCat = (i: number, patch: Partial<NewEditionCategory>) =>
+    setCats((all) => all.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -811,22 +831,40 @@ export function NewEditionForm({
       className="form-grid"
       onSubmit={async (e) => {
         e.preventDefault();
-        const feeCents = Math.round(Number(v.serviceFee.replace(/\./g, "").replace(",", ".").trim()) * 100);
+        const cents = (text: string) => Math.round(Number(text.replace(/\./g, "").replace(",", ".").trim()) * 100);
+        const feeCents = cents(v.serviceFee);
         if (!Number.isFinite(feeCents) || feeCents < 0) return setMsg({ ok: false, text: "Taxa de serviço inválida." });
+        const categories = cats
+          .filter((c) => c.label.trim())
+          .map((c) => ({
+            id: c.id || slugify(c.label),
+            label: c.label.trim(),
+            priceCents: cents(c.price),
+            description: c.description.trim() || null,
+          }));
+        if (categories.some((c) => !Number.isFinite(c.priceCents) || c.priceCents < 100 || c.id.length < 2)) {
+          return setMsg({ ok: false, text: "Confira o nome e o preço de cada categoria (ex.: 45,00)." });
+        }
         setBusy(true);
         setMsg(null);
         const r = await post("/api/admin/nova-festa", {
           ...v,
           capacity: v.capacity.trim() === "" ? null : Number(v.capacity),
           serviceFeeCents: feeCents,
-          deactivateCategories: deactivate,
+          accent: v.accent || null,
+          rules: v.rules
+            .split("\n")
+            .map((r) => r.trim())
+            .filter(Boolean),
+          categories,
+          activateCategories: activate && categories.length > 0,
           confirm: confirmText.trim().toUpperCase(),
         });
         setBusy(false);
         if (!r.ok) return setMsg({ ok: false, text: r.data?.error?.message ?? "Erro." });
         setMsg({
           ok: true,
-          text: `Pronto! A festa nº ${r.data.edition} começou. Revise regras e preços em Configurações.`,
+          text: `Pronto! A festa nº ${r.data.edition} começou. Quando tiver horário e tudo certo, abra as vendas no Resumo.`,
         });
         router.refresh();
       }}
@@ -846,6 +884,21 @@ export function NewEditionForm({
           ))}
         </select>
       </div>
+      <div className="field">
+        <label htmlFor="n-accent">Cor de destaque (combinando com o cartaz)</label>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <input
+            id="n-accent"
+            type="color"
+            value={v.accent || "#8de03b"}
+            onChange={set("accent")}
+            style={{ width: 56, height: 44, padding: 0, border: 0, background: "transparent" }}
+          />
+          <button type="button" className="back-link" onClick={() => setV((cur) => ({ ...cur, accent: "" }))}>
+            só verde
+          </button>
+        </div>
+      </div>
       {field("tagline", "Frase do cartaz", { span: true })}
       {field("startTime", "Início (pode deixar vazio)", { type: "time" })}
       {field("capacity", "Lotação (vazio = sem limite)", { type: "number" })}
@@ -857,13 +910,83 @@ export function NewEditionForm({
       {field("partner", "Parceiro / organização (opcional)")}
       {field("about", "Sobre a festa", { span: true, area: true })}
       {field("camarote", "Texto do camarote (vazio = sem camarote)", { span: true, area: true })}
+      <div className="field span-2">
+        <span className="hint" style={{ fontWeight: 700 }}>
+          Categorias e preços
+        </span>
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Preço (R$)</th>
+                <th>Aviso no site (opcional)</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {cats.map((c, i) => (
+                <tr key={i}>
+                  <td>
+                    <input
+                      className="input"
+                      style={{ minHeight: 40, width: 200 }}
+                      value={c.label}
+                      aria-label={`Nome da categoria ${i + 1}`}
+                      onChange={(e) => setCat(i, { label: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="input"
+                      style={{ minHeight: 40, width: 100 }}
+                      inputMode="decimal"
+                      value={c.price}
+                      aria-label={`Preço da categoria ${i + 1}`}
+                      onChange={(e) => setCat(i, { price: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="input"
+                      style={{ minHeight: 40, width: 260 }}
+                      maxLength={160}
+                      value={c.description}
+                      aria-label={`Aviso da categoria ${i + 1}`}
+                      onChange={(e) => setCat(i, { description: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="back-link"
+                      onClick={() => setCats((all) => all.filter((_, j) => j !== i))}
+                    >
+                      remover
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          style={{ marginTop: 10, justifySelf: "start" }}
+          onClick={() => setCats((all) => [...all, { id: "", label: "", price: "", description: "" }])}
+        >
+          + Adicionar categoria
+        </button>
+      </div>
       <label className="checkbox span-2">
-        <input type="checkbox" checked={deactivate} onChange={(e) => setDeactivate(e.target.checked)} />
+        <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
         <span>
-          Desativar as categorias de ingresso até eu definir os preços da nova festa (o site mostra &quot;Valores em
-          breve&quot;).
+          Preços definidos: mostrar as categorias no site. Desmarque para mostrar &quot;Valores em breve&quot; até
+          definir os preços.
         </span>
       </label>
+      {field("rules", "Regras de entrada (uma por linha)", { span: true, area: true })}
       <div className="field span-2">
         <label htmlFor="n-confirm">Já baixei as planilhas da festa atual. Digite NOVA FESTA para confirmar</label>
         <input

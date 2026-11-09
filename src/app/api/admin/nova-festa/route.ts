@@ -37,9 +37,26 @@ const schema = z.object({
   partner: text(80),
   about: z.string().trim().max(1500),
   camarote: z.string().trim().max(800),
+  accent: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .or(z.literal("").transform(() => null)),
   capacity: z.number().int().positive().max(100000).nullable(),
   serviceFeeCents: z.number().int().min(0).max(10000),
-  deactivateCategories: z.boolean(),
+  categories: z
+    .array(
+      z.object({
+        id: z.string().regex(/^[a-z0-9-]{2,32}$/),
+        label: z.string().trim().min(2).max(40),
+        priceCents: z.number().int().min(100).max(100000),
+        description: text(160),
+      }),
+    )
+    .max(10)
+    .refine((list) => new Set(list.map((c) => c.id)).size === list.length, "Há categorias com o mesmo nome"),
+  activateCategories: z.boolean(),
+  rules: z.array(z.string().trim().min(3).max(400)).min(1).max(30),
   // Confirmação explícita de que a festa anterior foi exportada.
   confirm: z.literal("NOVA FESTA"),
 });

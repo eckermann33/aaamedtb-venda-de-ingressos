@@ -10,6 +10,8 @@ export type Category = {
   priceCents: number;
   active: boolean;
   sortOrder: number;
+  /** Texto curto exibido junto da categoria (ex.: "Com carteira de estudante na entrada"). */
+  description: string | null;
 };
 
 export type Settings = {
@@ -55,8 +57,17 @@ export function termsHash(content: TermsContent): string {
 }
 
 export async function loadCategories(sql: Sql | TxSql, onlyActive = false): Promise<Category[]> {
-  const rows = await sql<{ id: string; label: string; price_cents: number; active: boolean; sort_order: number }[]>`
-    SELECT id, label, price_cents, active, sort_order
+  const rows = await sql<
+    {
+      id: string;
+      label: string;
+      price_cents: number;
+      active: boolean;
+      sort_order: number;
+      description: string | null;
+    }[]
+  >`
+    SELECT id, label, price_cents, active, sort_order, description
     FROM ticket_categories
     WHERE ${onlyActive ? sql`active` : sql`true`}
     ORDER BY sort_order, label
@@ -67,6 +78,7 @@ export async function loadCategories(sql: Sql | TxSql, onlyActive = false): Prom
     priceCents: r.price_cents,
     active: r.active,
     sortOrder: r.sort_order,
+    description: r.description,
   }));
 }
 
@@ -157,4 +169,31 @@ export async function upsertTermsVersion(sql: Sql | TxSql, content: TermsContent
 export async function getEntryMode(sql: Sql | TxSql): Promise<EntryMode> {
   const [row] = await sql<{ entry_mode: EntryMode }[]>`SELECT entry_mode FROM settings WHERE id = 1`;
   return row?.entry_mode ?? "list";
+}
+
+export type CategoryInput = {
+  id: string;
+  label: string;
+  priceCents: number;
+  active: boolean;
+  sortOrder: number;
+  description?: string | null;
+};
+
+/**
+ * Grava as categorias do formulário. As que não vieram ficam inativas (o histórico de compras
+ * continua apontando para elas).
+ */
+export async function saveCategories(tx: TxSql, categories: CategoryInput[]): Promise<void> {
+  for (const c of categories) {
+    await tx`
+      INSERT INTO ticket_categories (id, label, price_cents, active, sort_order, description)
+      VALUES (${c.id}, ${c.label}, ${c.priceCents}, ${c.active}, ${c.sortOrder}, ${c.description ?? null})
+      ON CONFLICT (id) DO UPDATE SET
+        label = EXCLUDED.label, price_cents = EXCLUDED.price_cents, active = EXCLUDED.active,
+        sort_order = EXCLUDED.sort_order, description = EXCLUDED.description, updated_at = now()
+    `;
+  }
+  const ids = categories.map((c) => c.id);
+  await tx`UPDATE ticket_categories SET active = false, updated_at = now() WHERE id <> ALL(${ids})`;
 }

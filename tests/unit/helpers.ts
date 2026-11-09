@@ -34,7 +34,14 @@ export async function resetDb(opts: { capacity?: number | null; salesOpen?: bool
         contactEmail: "contato@example.com",
       })}
   `;
-  await db`UPDATE ticket_categories SET active = true, price_cents = CASE id WHEN 'feminino' THEN 2000 ELSE 3000 END`;
+  // Categorias usadas nos testes: feminino R$ 20 e masculino R$ 30 (as demais ficam inativas).
+  await db`UPDATE ticket_categories SET active = false`;
+  await db`
+    INSERT INTO ticket_categories (id, label, price_cents, active, sort_order)
+    VALUES ('feminino', 'Feminino', 2000, true, 1), ('masculino', 'Masculino', 3000, true, 2)
+    ON CONFLICT (id) DO UPDATE SET active = true, price_cents = EXCLUDED.price_cents, label = EXCLUDED.label,
+      sort_order = EXCLUDED.sort_order, description = NULL
+  `;
   return terms.id;
 }
 

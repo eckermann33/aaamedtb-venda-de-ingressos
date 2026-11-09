@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow, Barlow_Condensed, Bowlby_One, Kalam, Knewave } from "next/font/google";
 import { headers } from "next/headers";
+import { cache } from "react";
 import type { EventInfo } from "@/config/event";
-import { posterOf } from "@/lib/event-display";
+import { accentStyle, posterOf } from "@/lib/event-display";
 import { getSql } from "@/server/db";
 import { env } from "@/server/env";
 import "./globals.css";
@@ -13,19 +14,22 @@ const display = Bowlby_One({ subsets: ["latin"], weight: "400", variable: "--fon
 const brush = Knewave({ subsets: ["latin"], weight: "400", variable: "--font-brush" });
 const hand = Kalam({ subsets: ["latin"], weight: "700", variable: "--font-hand" });
 
-/** Título e prévia de link (WhatsApp/Instagram) com o nome e o cartaz da festa atual. */
-export async function generateMetadata(): Promise<Metadata> {
-  let name = "Ingressos";
-  let poster: string | null = null;
+/** Festa atual (lida uma vez por requisição): nome, cartaz e cor de destaque. */
+const currentEvent = cache(async (): Promise<EventInfo | null> => {
   try {
     const [row] = await getSql()<{ event: EventInfo }[]>`SELECT event FROM settings WHERE id = 1`;
-    if (row) {
-      name = row.event.name;
-      poster = posterOf(row.event);
-    }
+    return row?.event ?? null;
   } catch {
-    // Sem banco (ex.: antes da migração): usa o título genérico.
+    // Sem banco (ex.: antes da migração): usa o visual e o título genéricos.
+    return null;
   }
+});
+
+/** Título e prévia de link (WhatsApp/Instagram) com o nome e o cartaz da festa atual. */
+export async function generateMetadata(): Promise<Metadata> {
+  const event = await currentEvent();
+  const name = event?.name ?? "Ingressos";
+  const poster = event ? posterOf(event) : null;
   return {
     metadataBase: new URL(env.appUrl),
     title: {
@@ -50,12 +54,14 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Lê os cabeçalhos para que todas as páginas sejam renderizadas por requisição (nonce da CSP).
   await headers();
+  const event = await currentEvent();
+  const accent = event ? accentStyle(event) : undefined;
   return (
     <html
       lang="pt-BR"
       className={`${body.variable} ${label.variable} ${display.variable} ${brush.variable} ${hand.variable}`}
     >
-      <body>
+      <body style={accent as React.CSSProperties | undefined} data-accent={accent ? "" : undefined}>
         <a className="skip-link" href="#conteudo">
           Pular para o conteúdo
         </a>

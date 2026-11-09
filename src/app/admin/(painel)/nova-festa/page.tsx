@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DEFAULT_EVENT, DEFAULT_SERVICE_FEE_CENTS } from "@/config/event";
+import { DEFAULT_CATEGORIES, DEFAULT_EVENT, DEFAULT_SERVICE_FEE_CENTS, DEFAULT_TERMS } from "@/config/event";
 import { eventDateParts } from "@/lib/dates";
 import { posterOf } from "@/lib/event-display";
 import { getSql } from "@/server/db";
@@ -8,6 +8,8 @@ import { listPosters } from "@/server/posters";
 import { getStats } from "@/server/reports";
 import { loadSettings } from "@/server/settings";
 import { NewEditionForm } from "../actions";
+
+const reais = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
 
 /** Começar a próxima festa: arquiva a atual (com os ingressos) e configura a nova. */
 export default async function NewEditionPage() {
@@ -68,10 +70,19 @@ export default async function NewEditionPage() {
             about: next?.about ?? "",
             camarote: next?.camarote ?? "",
             capacity: settings.capacity === null ? "" : String(settings.capacity),
-            serviceFee: ((next ? DEFAULT_SERVICE_FEE_CENTS : settings.serviceFeeCents) / 100)
-              .toFixed(2)
-              .replace(".", ","),
+            serviceFee: reais(next ? DEFAULT_SERVICE_FEE_CENTS : settings.serviceFeeCents),
+            accent: (next ? next.accent : e.accent) ?? "",
+            rules: (next ? DEFAULT_TERMS.rules : settings.terms.rules).join("\n"),
           }}
+          initialCategories={(next
+            ? DEFAULT_CATEGORIES
+            : settings.categories.filter((c) => c.active && c.id !== "camarote")
+          ).map((c) => ({
+            id: c.id,
+            label: c.label,
+            price: reais(c.priceCents),
+            description: c.description ?? "",
+          }))}
           posters={listPosters()}
           salesOpen={settings.salesOpen}
         />

@@ -23,3 +23,14 @@ export function posterOf(e: Pick<EventInfo, "poster">): string | null {
   if (e.poster === undefined) return LEGACY_POSTER;
   return e.poster && POSTER_PATTERN.test(e.poster) ? e.poster : null;
 }
+
+/**
+ * Variáveis CSS da cor de destaque da festa (ex.: o roxo do cartaz da Chopada). Sem cor
+ * definida, o site usa só o verde da Invictus.
+ */
+export function accentStyle(e: Pick<EventInfo, "accent">): Record<string, string> | undefined {
+  const hex = e.accent?.trim();
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return undefined;
+  const n = parseInt(hex.slice(1), 16);
+  return { "--accent": hex, "--accent-rgb": `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}` };
+}

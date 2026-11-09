@@ -17,6 +17,8 @@ export type EventInfo = {
   titleMain?: string | null;
   /** Cartaz da festa: arquivo em public/images (ex.: "/images/cartaz-chopada-final.webp"). */
   poster?: string | null;
+  /** Cor de destaque do site, combinando com o cartaz (ex.: "#a63cff"). Vazio = só o verde da Invictus. */
+  accent?: string | null;
   tagline: string;
   organizer: string;
   organizerShort: string;
@@ -53,18 +55,19 @@ export const DEFAULT_EVENT: EventInfo = {
   titleTop: "Chopada",
   titleMain: "Final",
   poster: "/images/cartaz-chopada-final.webp",
-  tagline: "Open chop · Atração confirmada: DJ HS · Mais novidades em breve!",
+  accent: "#a63cff",
+  tagline: "Open chop · Beer pong · DJ HS",
   organizer: "Associação Atlética Acadêmica de Medicina de Telêmaco Borba — Invictus (A.A.A.MED.TB)",
   organizerShort: "Atlética Invictus",
   partner: "QG Conveniência",
   date: "2026-11-21",
   startTime: null, // PENDENTE
   endTime: null, // PENDENTE (opcional)
-  venueName: null, // PENDENTE
+  venueName: "Sítio Contatto",
   venueAddress: null, // opcional
   ageRating: "Proibido para menores de 18 anos.",
   about:
-    "A Chopada Final da Invictus tem open chop, atração confirmada DJ HS e organização da QG Conveniência. As pulseiras são limitadas e a venda abre em breve. Mais novidades em breve!",
+    "A Chopada Final da Invictus é no Sítio Contatto, com open chop, beer pong e atração confirmada DJ HS. Organização: QG Conveniência. Apenas 1 lote de pulseiras! Universitários pagam preço especial apresentando a carteira de estudante na entrada.",
   camarote: "", // vazio = a seção de camarote não aparece no site
   contactEmail: null, // opcional
   contactPhone: "42991374203",
@@ -77,10 +80,12 @@ export const DEFAULT_TERMS: TermsContent = {
   rules: [
     "A entrada é permitida exclusivamente para maiores de 18 anos.",
     "Poderá ser exigido documento oficial com foto para verificar a identidade e a idade do participante.",
+    "Pulseira universitária (preço especial): na entrada é obrigatório apresentar a carteira de estudante. Quem não apresentar paga a diferença para o preço cheio (pulseira geral).",
+    "A pulseira universitária feminina é destinada a pessoas do gênero feminino; na portaria o documento com foto poderá ser conferido.",
+    "Open chop: bebida alcoólica servida somente para maiores de 18 anos.",
     "É proibida a entrada com bebidas externas.",
     "É proibida a entrada com armas, objetos cortantes, perfurantes ou outros objetos que representem risco à segurança.",
     "Não será permitida a entrada de objetos ou substâncias proibidos pela legislação ou pelas regras de segurança do evento.",
-    "O ingresso feminino é destinado a pessoas do gênero feminino; na portaria o documento com foto poderá ser conferido.",
     "O descumprimento das regras acima poderá gerar cobrança adicional na entrada da festa.",
   ],
   refundPolicy:
@@ -91,9 +96,34 @@ export const DEFAULT_TERMS: TermsContent = {
     "O ingresso pode ser transferido para outra pessoa maior de 18 anos. Para isso, envie uma mensagem para o telefone/WhatsApp de contato da organização informando o nome completo de quem comprou e o nome completo da nova pessoa. A organização atualiza o nome na lista oficial de entrada.",
 };
 
-export const DEFAULT_CATEGORIES = [
-  { id: "feminino", label: "Feminino", priceCents: 2000, sortOrder: 1 },
-  { id: "masculino", label: "Masculino", priceCents: 3000, sortOrder: 2 },
+export const DEFAULT_CATEGORIES: {
+  id: string;
+  label: string;
+  priceCents: number;
+  sortOrder: number;
+  description: string | null;
+}[] = [
+  {
+    id: "universitaria-feminina",
+    label: "Universitária feminina",
+    priceCents: 4500,
+    sortOrder: 1,
+    description: "Com carteira de estudante na entrada. Para o público feminino.",
+  },
+  {
+    id: "universitario-masculino",
+    label: "Universitário masculino",
+    priceCents: 5500,
+    sortOrder: 2,
+    description: "Com carteira de estudante na entrada.",
+  },
+  {
+    id: "geral",
+    label: "Geral (não universitário)",
+    priceCents: 7500,
+    sortOrder: 3,
+    description: "Preço cheio, para quem não é universitário.",
+  },
 ];
 
 /**

@@ -7,7 +7,7 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Camada | Ferramenta | Resultado |
 | --- | --- | --- |
 | Tipos (TypeScript) | `npm run typecheck` | ✅ sem erros |
-| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 98/98 |
+| Integração (regras de negócio + PostgreSQL real) | Vitest, `npm test` | ✅ 99/99 |
 | Ponta a ponta (navegador de celular + app de produção + simulador do Mercado Pago) | Playwright, `npm run test:e2e` | ✅ 29/29 |
 | Build de produção | `npm run build` | ✅ |
 
@@ -83,6 +83,7 @@ Executado em 20/10/2026, no ambiente de desenvolvimento (Linux, Node 22, Postgre
 | Alertas | Integração: estorno pendente da festa anterior continua no resumo |
 | Sem preços | Integração e navegador: categorias desativadas → "Valores em breve" e vendas bloqueadas; sem horário/local, a nova festa também não abre vendas |
 | Configurações | Navegador: salvar o formulário mantém título em duas linhas e cartaz; configuração antiga (sem esses campos) continua exibindo "Party do / Saco Cheio" e o cartaz anterior |
+| Categorias, regras e cor da nova festa | Integração e navegador: o formulário já vem com as categorias da Chopada (universitária feminina R$ 45, universitário masculino R$ 55, geral R$ 75, com avisos), as regras e a cor roxa; ao confirmar, as categorias antigas ficam inativas, as regras viram uma nova versão dos termos (políticas mantidas) e o site mostra os avisos e o visual roxo + verde |
 
 ## Outros testes
 

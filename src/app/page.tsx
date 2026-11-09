@@ -183,6 +183,7 @@ export default async function EventPage() {
                         <strong>{formatBRL(c.priceCents + fee)}</strong>
                       </p>
                     )}
+                    {c.description && <p className="ticket-desc">{c.description}</p>}
                   </div>
                   <div className="ticket-stub">
                     {s.canBuy ? (
@@ -237,7 +238,11 @@ export default async function EventPage() {
               </li>
               <li>
                 <strong>Escolha a categoria</strong>
-                <span>Feminino ou masculino. O valor aparece antes de pagar.</span>
+                <span>
+                  {tickets.length > 0
+                    ? `${tickets.map((c) => c.label).join(", ")}. O valor aparece antes de pagar.`
+                    : "O valor aparece antes de pagar."}
+                </span>
               </li>
               <li>
                 <strong>Pague com Pix ou cartão</strong>
@@ -276,7 +281,10 @@ export default async function EventPage() {
                   <Link href="/regras">Ver regras completas, reembolso, cancelamento e transferência →</Link>
                 </p>
               </div>
-              <div className={showCamarote ? "card camarote" : "card"}>
+              <div
+                className={showCamarote ? "card camarote" : "card"}
+                style={showCamarote ? undefined : { alignSelf: "start" }}
+              >
                 {showCamarote && (
                   <>
                     <Crown className="crown-bg" />
