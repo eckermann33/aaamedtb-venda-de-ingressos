@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: invictus
+          POSTGRES_PASSWORD: devpass
+          POSTGRES_DB: invictus_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U invictus -d invictus_test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://invictus:devpass@localhost:5432/invictus_test
+      E2E_DATABASE_URL: postgres://invictus:devpass@localhost:5432/invictus_e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Banco para os testes no navegador
+        run: PGPASSWORD=devpass psql -h localhost -U invictus -d invictus_test -c "CREATE DATABASE invictus_e2e"
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: test-results/
